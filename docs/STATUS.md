@@ -27,12 +27,13 @@ Last updated: 2026-10-25
 
 ## Blockers
 
-- None. Small open ask for the project lead: turn on private vulnerability reporting (repository Settings, Security, "Private vulnerability reporting"). The automation cannot change repository settings. Until then, SECURITY.md's email route works.
+- None.
 
 ## Resolved
 
 - 2026-10-25: security@zyaku.com receives mail (confirmed by the project lead).
 - 2026-10-25: `zyakuhq/holdsend` created by the project lead; this automation has push access.
+- 2026-10-25: private vulnerability reporting is enabled on the repository (confirmed by the project lead).
 
 ## Notes for the next session
 
