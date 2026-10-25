@@ -39,6 +39,8 @@ const MIN = 60 * 1000;
 
 type Step =
   | { kind: "add"; text: string; clockSkewMs: number }
+  /** The app tries a live send first, then queues it under the same key (its answer may have been lost). */
+  | { kind: "add_after_live_attempt"; text: string }
   | { kind: "cancel"; index: number }
   | { kind: "flush"; sender: number }
   | { kind: "flush_together"; senders: number }
@@ -46,6 +48,7 @@ type Step =
 
 const stepArb: fc.Arbitrary<Step> = fc.oneof(
   { weight: 4, arbitrary: fc.record({ kind: fc.constant("add" as const), text: fc.string({ minLength: 1, maxLength: 12 }), clockSkewMs: fc.integer({ min: -2 * 60 * MIN, max: 90 * 1000 }) }) },
+  { weight: 2, arbitrary: fc.record({ kind: fc.constant("add_after_live_attempt" as const), text: fc.string({ minLength: 1, maxLength: 12 }) }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant("cancel" as const), index: fc.nat(30) }) },
   { weight: 3, arbitrary: fc.record({ kind: fc.constant("flush" as const), sender: fc.nat(2) }) },
   { weight: 2, arbitrary: fc.record({ kind: fc.constant("flush_together" as const), senders: fc.integer({ min: 2, max: 3 }) }) },
@@ -156,6 +159,15 @@ async function runHistory(steps: Step[], fates: Fate[], makeStore: () => Store<P
       case "add": {
         const writtenAt = clock - step.clockSkewMs;
         const item = await senders[0]!.add("post.create", { text: step.text }, { owner: "person-a", writtenAt: Math.max(1, writtenAt) });
+        written.push({ key: item.key, text: step.text, writtenAt: item.writtenAt });
+        break;
+      }
+      case "add_after_live_attempt": {
+        const key = `live-${written.length}-${Math.random().toString(36).slice(2, 10)}`;
+        const fakeItem = { key, kind: "post.create", payload: { text: step.text }, writtenAt: clock, state: "waiting" as const, attempts: 0, touched: false };
+        // The live attempt meets the network like any other request (it may be created, lost, or both).
+        await Promise.race([send(99, fakeItem, { headers: { "Idempotency-Key": key, "Written-At": new Date(clock).toISOString() } }).catch(() => undefined), new Promise((r) => setTimeout(r, 5))]);
+        const item = await senders[0]!.add("post.create", { text: step.text }, { owner: "person-a", key, writtenAt: clock });
         written.push({ key: item.key, text: step.text, writtenAt: item.writtenAt });
         break;
       }

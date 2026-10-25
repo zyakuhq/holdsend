@@ -138,14 +138,14 @@ describe("old items", () => {
 describe("retry by a person", () => {
   it("keeps the key after a refusal or exhausted attempts", () => {
     const items = [item({ state: "stuck", stuckReason: "refused", attempts: 1, touched: true })];
-    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toBe("key-000000001");
+    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ key: "key-000000001", newKey: false });
     expect(items[0]?.state).toBe("waiting");
     expect(items[0]?.attempts).toBe(0);
   });
 
   it("uses a new key only after a key conflict", () => {
     const items = [item({ state: "stuck", stuckReason: "key_conflict", attempts: 1, touched: true })];
-    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toBe("fresh-key-0001");
+    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ key: "fresh-key-0001", newKey: true });
   });
 
   it("does nothing for an item that is not stuck", () => {

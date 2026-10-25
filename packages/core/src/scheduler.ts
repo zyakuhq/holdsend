@@ -7,6 +7,9 @@
  *   or that could not run because another sender held the lock, the next pass
  *   is scheduled on a backoff: tried again soon, without hammering a
  *   struggling server.
+ * - A pass that found items held by another sender schedules one more pass
+ *   for when that sender's claim would go stale, so an app killed mid-send
+ *   in another tab never leaves an item stuck as "sending".
  * - While offline, nothing is scheduled; the platform's reconnect signal
  *   calls `kick()`.
  *
@@ -62,6 +65,15 @@ export function createFlushScheduler(options: SchedulerOptions): FlushScheduler 
     }, delay);
   };
 
+  const at = (ms: number) => {
+    if (stopped) return;
+    if (timer !== null) timers.clearTimeout(timer);
+    timer = timers.setTimeout(() => {
+      timer = null;
+      void pass();
+    }, Math.min(Math.max(ms, 250), 10 * 60_000));
+  };
+
   const pass = async (): Promise<void> => {
     if (stopped) return;
     if (running) {
@@ -74,7 +86,12 @@ export function createFlushScheduler(options: SchedulerOptions): FlushScheduler 
       const report = await options.flush();
       options.onReport?.(report);
       if (report === "skipped" || report.retry + report.busy > 0) later();
-      else step = 0;
+      else {
+        step = 0;
+        // Items held by another sender: look again when its claim would go
+        // stale, in case that sender died. Nobody else would.
+        if (report.nextCheckInMs !== undefined) at(report.nextCheckInMs);
+      }
     } catch (err) {
       options.onError?.(err);
       later();

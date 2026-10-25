@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStore, Outbox, type OutboxItem } from "../src/index.js";
+import { MemoryStore, Outbox, classifyResponse, type OutboxItem } from "../src/index.js";
 import { FakeServer } from "./fake-server.js";
 
 type Payload = { text: string };
@@ -141,9 +141,7 @@ describe("Outbox", () => {
     const store = new MemoryStore<Payload>();
     const outbox = new Outbox<Payload>({
       store,
-      send: async () => {
-        throw new Error("Failed to fetch");
-      },
+      send: async () => classifyResponse(503),
       policy: { maxAttempts: 3, claimRenewMs: 0 },
     });
     await outbox.add("post.create", { text: "never lands" });

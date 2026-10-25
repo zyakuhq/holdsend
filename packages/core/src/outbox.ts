@@ -8,12 +8,14 @@
 import { newKey as defaultNewKey, isValidKey } from "./key.js";
 import { classifyThrown, requestHeaders, type RequestHeaderOptions } from "./protocol.js";
 import type { Store } from "./store.js";
+import { assertPlainJson } from "./json.js";
 import {
   approve as approveItem,
   cancel as cancelItem,
   claim,
   discard as discardItem,
   isSendable,
+  nextClaimExpiryMs,
   pruneSent,
   renewClaim,
   retry as retryItem,
@@ -21,6 +23,7 @@ import {
   statusOf,
   type CancelResult,
   type DiscardResult,
+  type RetryResult,
 } from "./transitions.js";
 import { DEFAULT_POLICY, type AttemptOutcome, type ItemStatus, type OutboxItem, type Policy } from "./types.js";
 
@@ -29,6 +32,12 @@ export interface SendContext {
   headers: Record<string, string>;
   /** 1 for the first automatic attempt since the item was added or reset. */
   attempt: number;
+  /**
+   * Fires when the attempt is abandoned (policy.attemptTimeoutMs). Pass it to
+   * fetch so the request is really cancelled. The attempt counts as "no
+   * answer" either way, and the item is tried again later with the same key.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -57,7 +66,8 @@ export interface AddOptions {
   /**
    * Reuse a key an earlier live attempt already sent, so a request that may
    * have reached the server is queued under the same key and cannot create a
-   * second copy.
+   * second copy. Such an item counts as possibly sent: it cannot be
+   * cancelled, only finished (or discarded with a "may exist" warning).
    */
   key?: string;
   /** When the person wrote it. Defaults to now. */
@@ -77,14 +87,23 @@ export interface FlushReport {
   busy: number;
   /** Items that became stuck in this flush. */
   stuck: number;
+  /**
+   * Set when items are held by another sender's claim: look again after this
+   * many ms. If that sender died, its claim will then have gone stale and
+   * this sender can take the item over.
+   */
+  nextCheckInMs?: number;
 }
 
 interface TimerApi {
   setInterval(fn: () => void, ms: number): unknown;
   clearInterval(handle: unknown): void;
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(handle: unknown): void;
+  AbortController?: new () => { signal: AbortSignal; abort(reason?: unknown): void };
 }
 
-const timers = globalThis as unknown as Partial<TimerApi>;
+const timers = globalThis as unknown as TimerApi;
 
 function emptyReport(): FlushReport {
   return { sent: 0, retry: 0, busy: 0, stuck: 0 };
@@ -100,7 +119,8 @@ export class Outbox<P = unknown> {
   private readonly headerOptions: ((item: OutboxItem<P>) => RequestHeaderOptions) | undefined;
   private readonly listeners = new Set<() => void>();
   private running: Promise<FlushReport> | null = null;
-  private rerun: { owner: string | undefined } | null = null;
+  /** Owners asked for while a flush runs. `null` stands for "every owner". */
+  private queued = new Set<string | null>();
 
   constructor(options: OutboxOptions<P>) {
     this.store = options.store;
@@ -113,6 +133,7 @@ export class Outbox<P = unknown> {
     if (this.policy.claimRenewMs > 0 && this.policy.claimRenewMs >= this.policy.staleClaimMs) {
       throw new RangeError("policy.claimRenewMs must be smaller than policy.staleClaimMs");
     }
+    if (!(this.policy.attemptTimeoutMs > 0)) throw new RangeError("policy.attemptTimeoutMs must be positive");
   }
 
   /** Keeps something the person wrote. Resolves once it is stored. */
@@ -122,6 +143,7 @@ export class Outbox<P = unknown> {
     }
     const writtenAt = options.writtenAt ?? this.now();
     if (!Number.isFinite(writtenAt) || writtenAt <= 0) throw new TypeError("writtenAt must be a positive epoch time in ms");
+    assertPlainJson(payload);
     const item: OutboxItem<P> = {
       key: options.key ?? this.makeKey(),
       kind,
@@ -129,7 +151,8 @@ export class Outbox<P = unknown> {
       writtenAt,
       state: "waiting",
       attempts: 0,
-      touched: false,
+      // A key from an earlier live attempt means the request may already be on the server.
+      touched: options.key !== undefined,
     };
     if (options.owner !== undefined) item.owner = options.owner;
     await this.store.update((items) => {
@@ -155,11 +178,11 @@ export class Outbox<P = unknown> {
   }
 
   approve(key: string): Promise<boolean> {
-    return this.change((items) => approveItem(items, key, this.now(), this.policy));
+    return this.change((items) => approveItem(items, key, this.now(), this.policy, this.makeKey));
   }
 
-  /** Returns the item's key after the reset (new only after a key conflict), or null. */
-  retry(key: string): Promise<string | null> {
+  /** Resets one stuck item for sending. See RetryResult for when its key changes and what that means. */
+  retry(key: string): Promise<RetryResult | null> {
     return this.change((items) => retryItem(items, key, this.now(), this.makeKey, this.policy));
   }
 
@@ -180,33 +203,42 @@ export class Outbox<P = unknown> {
   }
 
   /**
-   * Sends everything sendable (for `owner`, if given). Only one flush runs at
-   * a time per Outbox; a flush requested while one runs is folded into one
-   * more pass after it, so nothing asked for in the meantime is missed.
+   * Sends everything sendable (for `owner`, if given; every owner otherwise).
+   * Only one flush runs at a time per Outbox. Flushes asked for while one
+   * runs are queued, each owner once, and run before the returned promise
+   * resolves, so nothing asked for in the meantime is missed.
    */
   flush(owner?: string): Promise<FlushReport> {
     if (this.running) {
-      this.rerun = { owner };
+      this.queued.add(owner ?? null);
       return this.running;
     }
     const run = (async () => {
       const total = emptyReport();
-      let nextOwner: string | undefined = owner;
+      let next: string | null = owner ?? null;
       for (;;) {
-        const report = await this.pass(nextOwner);
+        const report = await this.pass(next ?? undefined);
         total.sent += report.sent;
         total.retry += report.retry;
         total.busy += report.busy;
         total.stuck += report.stuck;
-        if (!this.rerun) break;
-        nextOwner = this.rerun.owner;
-        this.rerun = null;
+        if (report.nextCheckInMs !== undefined) {
+          total.nextCheckInMs = Math.min(total.nextCheckInMs ?? Infinity, report.nextCheckInMs);
+        }
+        const [following] = this.queued;
+        if (following === undefined) break;
+        this.queued.delete(following);
+        next = following;
       }
       return total;
     })();
     this.running = run;
     const clear = () => {
-      if (this.running === run) this.running = null;
+      if (this.running !== run) return;
+      this.running = null;
+      // A failed run must not leave requests queued behind it: they would
+      // silently ride on a later flush for a different owner.
+      this.queued.clear();
     };
     run.then(clear, clear);
     return run;
@@ -228,36 +260,55 @@ export class Outbox<P = unknown> {
       this.emit();
 
       const outcome = await this.attempt(claimed, token);
-      await this.store.update((items) => settle(items, key, token, outcome, this.now(), this.policy));
+      const after = await this.store.update((items) => {
+        settle(items, key, token, outcome, this.now(), this.policy);
+        return items.find((i) => i.key === key);
+      });
 
       if (outcome.type === "sent") report.sent += 1;
       else if (outcome.type === "busy") report.busy += 1;
-      else if (outcome.type === "retry" && claimed.attempts < this.policy.maxAttempts) report.retry += 1;
-      else report.stuck += 1;
+      else if (after?.state === "stuck") report.stuck += 1;
+      else report.retry += 1;
       this.emit();
     }
 
-    await this.store.update((items) => pruneSent(items));
+    const waitMs = await this.store.update((items) => {
+      pruneSent(items);
+      return nextClaimExpiryMs(items, this.now(), this.policy, owner);
+    });
+    if (waitMs !== undefined) report.nextCheckInMs = waitMs;
     return report;
   }
 
   private async attempt(item: OutboxItem<P>, token: string): Promise<AttemptOutcome> {
+    const Controller = timers.AbortController ?? (globalThis as unknown as TimerApi).AbortController;
+    const controller = Controller ? new Controller() : null;
     const context: SendContext = {
       headers: requestHeaders(item, this.headerOptions?.(item) ?? {}),
       attempt: item.attempts,
     };
+    if (controller) context.signal = controller.signal;
+
     let renew: unknown = null;
-    if (this.policy.claimRenewMs > 0 && timers.setInterval && timers.clearInterval) {
+    if (this.policy.claimRenewMs > 0) {
       renew = timers.setInterval(() => {
         void this.store.update((items) => renewClaim(items, item.key, token, this.now())).catch(() => undefined);
       }, this.policy.claimRenewMs);
     }
+    let timeout: unknown = null;
+    const abandoned = new Promise<AttemptOutcome>((resolve) => {
+      timeout = timers.setTimeout(() => {
+        controller?.abort(new Error("attempt timed out"));
+        resolve({ type: "retry", error: { message: "No answer before the attempt timed out" }, noAnswer: true });
+      }, this.policy.attemptTimeoutMs);
+    });
     try {
-      return await this.send(item, context);
-    } catch (err) {
-      return classifyThrown(err);
+      // Whichever comes first: the answer, or the timeout. A send that never
+      // settles can no longer hold its item (or this Outbox) forever.
+      return await Promise.race([this.send(item, context).catch((err: unknown) => classifyThrown(err)), abandoned]);
     } finally {
-      if (renew !== null) timers.clearInterval?.(renew);
+      if (renew !== null) timers.clearInterval(renew);
+      if (timeout !== null) timers.clearTimeout(timeout);
     }
   }
 

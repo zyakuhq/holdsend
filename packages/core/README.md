@@ -2,7 +2,7 @@
 
 The platform-independent part of [HoldSend](https://github.com/zyakuhq/holdsend): an outbox that keeps what a person writes while offline and sends it exactly once when the connection returns.
 
-No runtime dependencies. ESM. Under 4 KB minified and gzipped.
+No runtime dependencies. ESM. About 4.5 KB minified and gzipped, with a CI budget of 5 KB.
 
 > Early and unreleased. The API may change before 0.1.0.
 

@@ -65,7 +65,8 @@ export function classifyResponse(status: number, code?: string, message?: string
 
   // No definite answer, or an answer that may change by itself later:
   // timeouts, rate limits, server trouble, and auth that may be refreshed.
-  if (status === 0 || status === 401 || status === 403 || status === 408 || status === 425 || status === 429 || status >= 500) {
+  if (status === 0) return { type: "retry", error, noAnswer: true };
+  if (status === 401 || status === 403 || status === 408 || status === 425 || status === 429 || status >= 500) {
     return { type: "retry", error };
   }
   // Any other 4xx is the server refusing this request. Repeating it would
@@ -74,8 +75,8 @@ export function classifyResponse(status: number, code?: string, message?: string
   return { type: "retry", error };
 }
 
-/** A thrown error (fetch failed, timeout, offline) always means "no answer". */
+/** A thrown error (fetch failed, timeout, offline) always means "no answer": the request may or may not have arrived. */
 export function classifyThrown(err: unknown): AttemptOutcome {
   const message = err instanceof Error && err.message ? err.message : String(err ?? "Network error");
-  return { type: "retry", error: { message } };
+  return { type: "retry", error: { message }, noAnswer: true };
 }

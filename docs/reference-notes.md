@@ -47,4 +47,6 @@ HoldSend's behaviour follows the offline publishing that Zyaku already runs in p
 - The written time travels in a `Written-At` header rather than the request body, so the body the server hashes is exactly what the person wrote and no transport field needs excluding.
 - A result reported by a sender whose claim was taken over is ignored, except "sent", which is a fact about the server. This stops a slow, presumed-dead sender from undoing the work of the sender that replaced it.
 - Discard reports honestly whether a copy may already exist on the server.
+- A key conflict does not prove that nothing was created: it proves the key holds a different request, which may have been an earlier version of the same content. HoldSend therefore gives a new key only when a person asks to retry, and tells the app it did (`newKey: true`), so the app can warn that a second copy is possible.
+- Attempts that get no answer at all do not use up an item's attempt budget, and every attempt has a timeout, so a request that hangs cannot hold its item forever.
 - Storage is an interface with one hard rule (atomic update), so the same rules run against IndexedDB, AsyncStorage, MMKV or memory.

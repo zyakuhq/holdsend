@@ -130,6 +130,11 @@ export function settle(items: OutboxItem[], key: string, token: string, outcome:
       item.attempts = Math.max(0, item.attempts - 1);
       return;
     case "retry":
+      // Nothing came back: the attempt says nothing about the request, only
+      // about the network. It does not use up the budget, so an item written
+      // on a network that only looks connected is still sent by itself when
+      // the connection really returns.
+      if (outcome.noAnswer) item.attempts = Math.max(0, item.attempts - 1);
       if (item.attempts >= policy.maxAttempts) {
         item.state = "stuck";
         item.stuckReason = "attempts_exhausted";
@@ -172,14 +177,18 @@ export function cancel(items: OutboxItem[], key: string): CancelResult {
 }
 
 /**
- * A person approves sending one item that needs confirmation. The key never
- * changes: an earlier attempt may already be on the server, and the same key
- * is what makes the server answer with that original.
+ * A person approves sending one item that needs confirmation. The key stays
+ * the same: an earlier attempt may already be on the server, and the same key
+ * is what makes the server answer with that original. The one exception is
+ * an item whose key the server already refused as a conflict: resending it
+ * with that key could only be refused again, so it gets a new one (see
+ * `retry` for what that means).
  */
-export function approve(items: OutboxItem[], key: string, now: number, policy: Policy = DEFAULT_POLICY): boolean {
+export function approve(items: OutboxItem[], key: string, now: number, policy: Policy = DEFAULT_POLICY, newKey?: () => string): boolean {
   const item = find(items, key);
   if (!item || !needsConfirmation(item, now, policy)) return false;
   item.approvedAt = now;
+  if (item.state === "stuck" && item.stuckReason === "key_conflict" && newKey) item.key = newKey();
   if (item.state === "stuck" || item.state === "sending") {
     item.state = "waiting";
     delete item.claimedAt;
@@ -190,23 +199,38 @@ export function approve(items: OutboxItem[], key: string, now: number, policy: P
   return true;
 }
 
+export interface RetryResult {
+  /** The key the item will be sent with. */
+  key: string;
+  /**
+   * True when the item got a new key. That happens only after a key
+   * conflict: the server holds a DIFFERENT request under the old key, so the
+   * old key can never succeed. Be honest with the person here: if the
+   * request under the old key was an earlier version of this same content
+   * (for example the app changed what it sends between attempts), sending
+   * with a new key can publish a second copy. Ask before sending when that
+   * is possible.
+   */
+  newKey: boolean;
+}
+
 /**
  * A person retries one stuck item. Its attempts are reset. It keeps its key,
- * unless the server rejected the key itself (a conflict): then the server
- * proved nothing was created under that key for this content, so a new key
- * cannot cause a duplicate.
+ * so a copy that did reach the server is answered with, not duplicated,
+ * unless the server refused the key itself as a conflict (see RetryResult).
  */
-export function retry(items: OutboxItem[], key: string, now: number, newKey: () => string, policy: Policy = DEFAULT_POLICY): string | null {
+export function retry(items: OutboxItem[], key: string, now: number, newKey: () => string, policy: Policy = DEFAULT_POLICY): RetryResult | null {
   const item = find(items, key);
   if (!item || statusOf(item, now, policy) !== "stuck") return null;
-  if (item.stuckReason === "key_conflict") item.key = newKey();
+  const replaced = item.stuckReason === "key_conflict";
+  if (replaced) item.key = newKey();
   item.state = "waiting";
   item.attempts = 0;
   delete item.claimedAt;
   delete item.claimToken;
   delete item.stuckReason;
   delete item.lastError;
-  return item.key;
+  return { key: item.key, newKey: replaced };
 }
 
 export type DiscardResult =
@@ -230,6 +254,22 @@ export function discard(items: OutboxItem[], key: string, now: number, policy: P
   if (isClaimLive(item, now, policy)) return "in_flight";
   items.splice(index, 1);
   return item.touched ? "discarded_may_exist" : "discarded";
+}
+
+/**
+ * When the earliest live claim held by another sender goes stale, in ms from
+ * `now`, or undefined if there is none. A flush that skipped such items must
+ * look again then: if that sender died, nobody else will.
+ */
+export function nextClaimExpiryMs(items: OutboxItem[], now: number, policy: Policy = DEFAULT_POLICY, owner?: string): number | undefined {
+  let soonest: number | undefined;
+  for (const item of items) {
+    if (owner !== undefined && item.owner !== undefined && item.owner !== owner) continue;
+    if (!isClaimLive(item, now, policy) || item.attempts >= policy.maxAttempts) continue;
+    const inMs = (item.claimedAt ?? 0) + policy.staleClaimMs - now + 1;
+    if (soonest === undefined || inMs < soonest) soonest = Math.max(0, inMs);
+  }
+  return soonest;
 }
 
 /** Drops delivered items. Returns how many were removed. */
