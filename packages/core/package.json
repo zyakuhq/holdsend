@@ -1,0 +1,37 @@
+{
+  "name": "@holdsend/core",
+  "version": "0.0.0",
+  "description": "Offline outbox state machine: idempotency keys, written-at time, max-age confirmation and cancel. No runtime dependencies.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zyakuhq/holdsend.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "offline",
+    "offline-first",
+    "outbox",
+    "idempotency",
+    "exactly-once",
+    "queue"
+  ]
+}

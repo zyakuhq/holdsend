@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+# Private, never committed: extra terms for the local PII scan (one per line).
+.pii-denylist

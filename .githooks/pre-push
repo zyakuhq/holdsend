@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs the secret scan and the PII scan before every push.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -e
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --redact --no-banner --exit-code 1 .
+else
+  echo "pre-push: gitleaks is not installed; the secret scan will run in CI." >&2
+  echo "          Install it from https://github.com/gitleaks/gitleaks/releases" >&2
+fi
+
+node scripts/pii-scan.mjs
