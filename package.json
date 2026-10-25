@@ -1,0 +1,30 @@
+{
+  "name": "holdsend-monorepo",
+  "private": true,
+  "description": "Write offline, publish exactly once.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "size": "node scripts/size-check.mjs",
+    "scan:pii": "node scripts/pii-scan.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run size && npm run scan:pii"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.12.2",
+    "vitest": "^2.1.4"
+  }
+}
