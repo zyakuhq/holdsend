@@ -104,7 +104,7 @@ function layout({ title, body, nav, source, toRoot }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} · HoldSend</title>
+<title>${title === "HoldSend" ? "HoldSend: write offline, publish exactly once" : `${escapeHtml(title)} · HoldSend`}</title>
 <meta name="description" content="HoldSend: write offline, publish exactly once. An open-source library for apps where what people write must not be lost.">
 <link rel="stylesheet" href="${toRoot}style.css">
 </head>
