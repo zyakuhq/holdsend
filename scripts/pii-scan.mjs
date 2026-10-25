@@ -30,10 +30,10 @@ const RULES = [
   { name: "ipv4", re: /(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/g, allow: (m) => ALLOWED_IPS.some((r) => r.test(m)) },
   { name: "private-host", re: /\b[a-z0-9-]+\.zyaku\.com\b/gi },
   { name: "private-path", re: /zyaku\.com\/(?:internal|admin|api|ops|staging)\b/gi },
-  { name: "private-path", re: /\/zyaku\/(?:production|staging|prod|dev)\b/gi },
   { name: "internal-tld", re: /\b[a-z0-9-]+\.(?:internal|corp|lan)\b/gi },
   { name: "cloud-resource", re: /\barn:aws:[a-z0-9-]+:/gi },
-  { name: "cloud-resource", re: /\b[a-z0-9.-]+\.(?:amazonaws\.com|railway\.app|up\.railway\.app|rlwy\.net)\b/gi },
+  // Hostnames of deployed services on common hosting platforms.
+  { name: "cloud-resource", re: /\b[a-z0-9.-]+\.(?:amazonaws\.com|cloudfront\.net|herokuapp\.com|vercel\.app|netlify\.app|fly\.dev|onrender\.com|railway\.app|rlwy\.net|azurewebsites\.net|run\.app|appspot\.com|workers\.dev|pages\.dev)\b/gi },
   { name: "codename", re: /\bZY-[A-Z][A-Z0-9-]{2,}\b/g },
 ];
 

@@ -2,18 +2,19 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-25
+Last updated: 2026-10-25 (evening of day one)
 
 ## Done
 
-- Read the reference design and wrote [reference-notes.md](reference-notes.md) in our own words.
-- Chose the name HoldSend and the Apache-2.0 licence ([0001](decisions/0001-name-and-licence.md)).
-- Monorepo set up: npm workspaces, strict TypeScript, ESM, ESLint, Vitest.
-- `@holdsend/core` v0: outbox state machine, keys, written-time bounds, wire protocol, `Outbox` runtime and `MemoryStore`. 57 tests, including lost answers, two senders on one store, stale claims, old items and cancel rules. 3.2 KB min+gzip, no runtime dependencies.
-- Governance files: LICENSE, NOTICE, README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, GOVERNANCE.
-- CI: lint, typecheck, tests, build, size budget, gitleaks on full history, PII scan with a hashed denylist. Local pre-push hook runs the same scans.
-- Decisions 0002 (core state model) and 0003 (written time in a header).
-- Repository published at https://github.com/zyakuhq/holdsend (2026-10-25). First CI run green: checks, secret and PII scan, and the organisation's CodeQL scan.
+- Reference design read and written up in our own words ([reference-notes.md](reference-notes.md)).
+- Name, licence, governance files, CI (lint, build, types, tests, size budgets, gitleaks, PII scan with hashed denylist, company-email check on PR commits, real Postgres race tests).
+- `@holdsend/core`: outbox rules, `Outbox` runtime with attempt timeouts and abort signals, keys, written-time bounds, protocol, JSON payload checks, flush scheduler.
+- `@holdsend/server`: idempotency store for memory and Postgres (any `query()` driver), `handleIdempotent`, tombstones, `forgetOwner`, purge.
+- `@holdsend/web`: IndexedDB store (atomic across tabs, reopens closed connections), `SenderLock`, auto-flush, honest Background Sync helpers.
+- `@holdsend/react-native`: `KeyValueStore` over AsyncStorage or MMKV (shared update chain, corrupt-data and size guards), native auto-flush.
+- Never-twice, never-lost fault-injection suite (fast-check), checked against deliberately broken code ([testing.md](testing.md)).
+- First independent audit: 21 findings, all fixed or explained, each with a regression test ([audits/2026-10-25-first-independent-audit.md](audits/2026-10-25-first-independent-audit.md)).
+- Decisions 0001 to 0006.
 
 ## In progress
 
@@ -21,13 +22,19 @@ Last updated: 2026-10-25
 
 ## Next three tasks
 
-1. `@holdsend/server`: in-memory idempotency store with the full contract (claim, complete in one transaction, replay, conflict, in progress, gone), then the Postgres adapter.
-2. `@holdsend/web`: IndexedDB store with an atomic `update` and the cross-tab lock (Web Locks, with a lease fallback), with concurrency tests.
-3. Property-based and fault-injection tests for the core (lost answers, timeouts, double taps, app kill mid-send, clock skew), using fast-check.
+1. Examples: a vanilla web page, a React app and an Express + Postgres server, wired end to end, plus a demo that works in airplane mode.
+2. A 30-second quick start in the README and a small docs site (GitHub Pages, plain Markdown).
+3. Prepare v0.1.0: CHANGELOG, issue templates, "good first issue" labels, package metadata. Publishing to npm needs the `@holdsend` npm organisation and credentials from the project lead.
+
+## After that
+
+- Emergency module: dedupe, written time, background sending where possible, SMS hand-off, honest platform limits.
+- Conflict handling for one draft edited on two devices (append-only updates with a reason). This is the hard part; say so.
+- An Android background task for React Native.
 
 ## Blockers
 
-- None.
+- None now. At v0.1.0: npm organisation `@holdsend` and publish credentials.
 
 ## Resolved
 
@@ -35,7 +42,12 @@ Last updated: 2026-10-25
 - 2026-10-25: `zyakuhq/holdsend` created by the project lead; this automation has push access.
 - 2026-10-25: private vulnerability reporting is enabled on the repository (confirmed by the project lead).
 
+## Open questions for the project lead
+
+- Five early merge commits list a company email address as author. Removing it needs a history rewrite of a public repository; that is the project lead's call. New merges keep the noreply address, and CI blocks company addresses in pull requests.
+
 ## Notes for the next session
 
-- Never put Zyaku code, data, names or configuration in this repository. Run `npm run check` and the pre-push hook before every push.
+- Never put Zyaku code, data, names or configuration in this repository. Write everything fresh; do not write reference code from memory either (see the audit's clean-room note). Run `npm run check` and gitleaks before every push.
+- Merge by fast-forwarding `main` to the tested pull-request commit (not GitHub's squash merge, which stamps the account email).
 - Repository secret `PII_DENYLIST` (comma-separated plaintext terms) can extend the denylist in CI without publishing it.

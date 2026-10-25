@@ -67,6 +67,12 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
             db.close();
             this.dbPromise = null;
           };
+          // The browser closed the connection (iOS Safari does this after the
+          // app was in the background, or when storage is cleared): reopen
+          // next time instead of failing every write from now on.
+          db.onclose = () => {
+            this.dbPromise = null;
+          };
           resolve(db);
         };
         request.onerror = () => reject(request.error ?? new Error("could not open IndexedDB"));
@@ -79,16 +85,31 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
     return this.dbPromise;
   }
 
-  async read(): Promise<OutboxItem<P>[]> {
+  /**
+   * Starts a transaction, reopening the database once if the cached
+   * connection turns out to be closed. Nothing has run yet at that point, so
+   * retrying is safe.
+   */
+  private async begin(stores: string, mode: IDBTransactionMode): Promise<IDBTransaction> {
     const db = await this.open();
-    const tx = db.transaction(ITEMS, "readonly");
+    try {
+      return db.transaction(stores, mode);
+    } catch (err) {
+      const name = (err as { name?: unknown } | null)?.name;
+      if (name !== "InvalidStateError" && name !== "UnknownError") throw err;
+      this.dbPromise = null;
+      return (await this.open()).transaction(stores, mode);
+    }
+  }
+
+  async read(): Promise<OutboxItem<P>[]> {
+    const tx = await this.begin(ITEMS, "readonly");
     const items = await promisify(tx.objectStore(ITEMS).getAll() as IDBRequest<OutboxItem<P>[]>);
     return items;
   }
 
   async update<T>(fn: (items: OutboxItem<P>[]) => T): Promise<T> {
-    const db = await this.open();
-    const tx = db.transaction(ITEMS, "readwrite");
+    const tx = await this.begin(ITEMS, "readwrite");
     const store = tx.objectStore(ITEMS);
     const finished = done(tx);
     // Attach a handler now so a failure is never an unhandled rejection; it is rethrown below.
@@ -136,12 +157,11 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
    */
   async isDurable(): Promise<boolean> {
     try {
-      const db = await this.open();
       const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-      const write = db.transaction(META, "readwrite");
+      const write = await this.begin(META, "readwrite");
       write.objectStore(META).put(token, "probe");
       await done(write);
-      const readTx = db.transaction(META, "readonly");
+      const readTx = await this.begin(META, "readonly");
       const back = await promisify(readTx.objectStore(META).get("probe"));
       return back === token;
     } catch {

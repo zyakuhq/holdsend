@@ -29,6 +29,34 @@ jobs:
       - run: npm test
       - run: npm run size
 
+  postgres:
+    name: Real Postgres races
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: holdsend-ci
+          POSTGRES_DB: holdsend
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Races between real connections
+        env:
+          HOLDSEND_PG_URL: postgres://postgres:holdsend-ci@localhost:5432/holdsend
+        run: npx vitest run packages/server/test/real-postgres.test.ts
+
   privacy:
     name: Secret and PII scan
     runs-on: ubuntu-latest
@@ -53,3 +81,16 @@ jobs:
         env:
           PII_DENYLIST: ${{ secrets.PII_DENYLIST }}
         run: node scripts/pii-scan.mjs
+      - name: No company email addresses in commit metadata
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Commits in this pull request must not carry a company address as
+          # author or committer. The addresses are not printed: logs are public.
+          if git log --format='%ae%n%ce' "$BASE..$HEAD" | grep -qi '@zyaku\.com$'; then
+            echo "A commit in this pull request uses a company email address. Use a GitHub noreply address."
+            exit 1
+          fi
+          echo "commit emails ok"

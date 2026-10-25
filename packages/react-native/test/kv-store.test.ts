@@ -161,3 +161,16 @@ describe("startNativeAutoFlush", () => {
     expect(unsubscribed.sort()).toEqual(["app", "net"]);
   });
 });
+
+describe("audit 11: a queue too large for Android's AsyncStorage", () => {
+  it("is refused before writing, and everything already queued stays usable", async () => {
+    const { OutboxTooLargeError } = await import("../src/index.js");
+    const storage = fakeAsyncStorage();
+    const store = new KeyValueStore<Payload>(storage, { maxBytes: 2_000 });
+    await store.update((items) => void items.push(item("item-key-0001")));
+    await expect(store.update((items) => void items.push({ ...item("item-key-0002"), payload: { text: "é".repeat(1_500) } }))).rejects.toBeInstanceOf(OutboxTooLargeError);
+    expect((await store.read()).map((i) => i.key)).toEqual(["item-key-0001"]);
+    const unlimited = new KeyValueStore<Payload>(fakeAsyncStorage(), { maxBytes: Infinity });
+    await unlimited.update((items) => void items.push({ ...item("item-key-0003"), payload: { text: "x".repeat(10_000) } }));
+  });
+});

@@ -1,6 +1,7 @@
 export {
   CorruptOutboxError,
   KeyValueStore,
+  OutboxTooLargeError,
   fromMmkv,
   type AsyncKeyValue,
   type KeyValueStoreOptions,

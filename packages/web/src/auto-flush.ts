@@ -42,7 +42,7 @@ export function startAutoFlush<P>(outbox: Outbox<P>, options: AutoFlushOptions =
   const scheduler = createFlushScheduler({
     flush: async () => {
       const result = await lock.run(() => outbox.flush(options.owner));
-      return result.acquired ? result.value : "skipped";
+      return result.ran ? result.value : "skipped";
     },
     isOnline: options.isOnline ?? defaultIsOnline,
     ...(options.backoffMs ? { backoffMs: options.backoffMs } : {}),

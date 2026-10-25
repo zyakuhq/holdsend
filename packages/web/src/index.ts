@@ -2,7 +2,7 @@ import { MemoryStore, type Store } from "@holdsend/core";
 import { IndexedDbStore, type IndexedDbStoreOptions } from "./indexeddb-store.js";
 
 export { IndexedDbStore, requestPersistentStorage, type IndexedDbStoreOptions } from "./indexeddb-store.js";
-export { SenderLock, type LockManagerLike, type SenderLockOptions, type SenderLockResult, type SyncStorageLike } from "./sender-lock.js";
+export { SenderLock, type LeaseStorage, type LockedRun, type SenderLockOptions, type WebLockApi } from "./sender-lock.js";
 export { startAutoFlush, type AutoFlusher, type AutoFlushOptions } from "./auto-flush.js";
 export { onBackgroundSync, requestBackgroundSync, type BackgroundSupport, type BackgroundSyncOptions } from "./background-sync.js";
 
