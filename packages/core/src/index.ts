@@ -40,6 +40,7 @@ export {
   isClaimLive,
   isSendable,
   needsConfirmation,
+  nextClaimExpiryMs,
   pruneSent,
   renewClaim,
   retry,
@@ -47,7 +48,10 @@ export {
   statusOf,
   type CancelResult,
   type DiscardResult,
+  type RetryResult,
 } from "./transitions.js";
+
+export { NotJsonError, assertPlainJson } from "./json.js";
 
 export { MemoryStore, type Store } from "./store.js";
 

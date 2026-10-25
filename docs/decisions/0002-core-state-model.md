@@ -19,7 +19,15 @@ Date: 2026-10-25. Status: accepted.
 
 - Pure rules are executed by tests, not just read, and the same tests protect every platform.
 - Deriving the visible status instead of storing it avoids a whole class of bugs where a stored label goes stale (an item shown as "sending" for months).
-- Separating `refused` (the server said no to this request) from `conflict` (the key holds a different request) lets a person retry a refusal with the same key, while a conflict, and only a conflict, gets a new key.
+- Separating `refused` (the server said no to this request) from `conflict` (the key holds a different request) lets a person retry a refusal with the same key, while a conflict, and only a conflict, gets a new key. That new key is reported (`newKey: true`) because it can publish a second copy if the request under the old key was an earlier version of the same content.
+
+## Amended 2026-10-25 after the first independent audit
+
+- Attempts with no answer (thrown fetch, timeout) no longer count against `maxAttempts`; only answers from the server do.
+- Every attempt has a timeout (`attemptTimeoutMs`, default two minutes) and an AbortSignal.
+- An item added with a key from an earlier live attempt is marked as possibly sent, so it cannot be cancelled.
+- Payloads must be plain JSON and are checked when added.
+- `flush` reports `nextCheckInMs` when another sender holds items, and the scheduler looks again then.
 
 ## Consequences
 

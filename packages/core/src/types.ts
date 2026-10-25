@@ -47,7 +47,12 @@ export interface OutboxItem<P = unknown> {
   /** When the person wrote it, from the device clock (epoch ms). Set once. */
   writtenAt: number;
   state: ItemState;
-  /** Automatic attempts used since the item was added or last reset by a person. */
+  /**
+   * Automatic attempts used since the item was added or last reset by a
+   * person. Attempts that got no answer at all (offline, timeout, a network
+   * that says it is connected but is not) do not count: they say nothing
+   * about the request, only about the network.
+   */
   attempts: number;
   /**
    * True once any attempt has started. Never reset. An item that may have
@@ -85,6 +90,14 @@ export interface Policy {
    * must approve them first. Default 30 days.
    */
   confirmAfterMs: number;
+  /**
+   * An attempt still unanswered after this long is abandoned: its AbortSignal
+   * fires and it counts as "no answer". The item is tried again later with
+   * the same key, so a late arrival on the server is still one copy. Without
+   * this, a request that hangs forever would hold its item, and every later
+   * flush, forever. Default 2 minutes; raise it for very large uploads.
+   */
+  attemptTimeoutMs: number;
 }
 
 export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
@@ -92,6 +105,7 @@ export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
   staleClaimMs: 2 * 60 * 1000,
   claimRenewMs: 30 * 1000,
   confirmAfterMs: 30 * 24 * 60 * 60 * 1000,
+  attemptTimeoutMs: 2 * 60 * 1000,
 });
 
 /**
@@ -101,8 +115,12 @@ export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
 export type AttemptOutcome =
   /** The server has it (first time, or a replay of the original). */
   | { type: "sent" }
-  /** No definite answer: network error, timeout, 5xx, rate limit. Try later, same key. */
-  | { type: "retry"; error?: ItemError }
+  /**
+   * Try later, with the same key. `noAnswer` means nothing came back at all
+   * (offline, timeout, connection reset): such attempts do not use up the
+   * item's attempt budget. Server answers like 5xx or 429 do.
+   */
+  | { type: "retry"; error?: ItemError; noAnswer?: boolean }
   /** The server is still processing an earlier attempt with this key. Not counted. */
   | { type: "busy"; error?: ItemError }
   /** The server holds a different request under this key. Final for this key. */
