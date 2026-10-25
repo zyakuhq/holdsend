@@ -1,0 +1,39 @@
+{
+  "name": "@holdsend/server",
+  "version": "0.0.0",
+  "description": "Server side of HoldSend: an idempotency store that records the key and the result in the same transaction as the write, replays the original answer for a repeated key, and refuses a different request under the same key.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@holdsend/core": "0.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zyakuhq/holdsend.git",
+    "directory": "packages/server"
+  },
+  "keywords": [
+    "idempotency",
+    "idempotency-key",
+    "exactly-once",
+    "postgres",
+    "offline-first"
+  ]
+}
