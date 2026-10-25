@@ -1,0 +1,39 @@
+{
+  "name": "@holdsend/react-native",
+  "version": "0.0.0",
+  "description": "HoldSend for React Native: an outbox store over AsyncStorage or MMKV, and an auto-flush that you wire to NetInfo and AppState.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@holdsend/core": "0.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zyakuhq/holdsend.git",
+    "directory": "packages/react-native"
+  },
+  "keywords": [
+    "offline-first",
+    "react-native",
+    "asyncstorage",
+    "mmkv",
+    "outbox"
+  ]
+}
