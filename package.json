@@ -20,7 +20,8 @@
     "lint": "eslint .",
     "size": "node scripts/size-check.mjs",
     "scan:pii": "node scripts/pii-scan.mjs",
-    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run scan:pii"
+    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run scan:pii",
+    "test:soak": "HOLDSEND_RUNS=3000 vitest run never-twice"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
