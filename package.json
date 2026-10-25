@@ -8,7 +8,8 @@
     "packages/core",
     "packages/server",
     "packages/web",
-    "packages/react-native"
+    "packages/react-native",
+    "examples/notes"
   ],
   "engines": {
     "node": ">=20"
@@ -21,7 +22,8 @@
     "size": "node scripts/size-check.mjs",
     "scan:pii": "node scripts/pii-scan.mjs",
     "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run scan:pii",
-    "test:soak": "HOLDSEND_RUNS=3000 vitest run never-twice"
+    "test:soak": "HOLDSEND_RUNS=3000 vitest run never-twice",
+    "e2e": "npm run e2e --workspace holdsend-example-notes"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
@@ -32,6 +34,7 @@
     "eslint": "^9.13.0",
     "fake-indexeddb": "^6.2.6",
     "fast-check": "^4.10.2",
+    "globals": "^16.5.0",
     "pg": "^8.23.1",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.12.2",

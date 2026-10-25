@@ -60,6 +60,23 @@ jobs:
           # Fail if the tests were skipped (for example a missing database URL), and leave a visible count.
           node -e 'const r=require("./pg-results.json"); console.log(`::notice title=Real Postgres::${r.numPassedTests} passed, ${r.numPendingTests} skipped`); if (r.numPassedTests < 2 || r.numPendingTests > 0) process.exit(1)'
 
+  example:
+    name: Example in a real browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Chromium for Playwright
+        working-directory: examples/notes
+        run: npx playwright install --with-deps chromium
+      - name: Offline, lost-answer and two-tab tests
+        run: npm run e2e
+
   privacy:
     name: Secret and PII scan
     runs-on: ubuntu-latest
@@ -85,15 +102,16 @@ jobs:
           PII_DENYLIST: ${{ secrets.PII_DENYLIST }}
         run: node scripts/pii-scan.mjs
       - name: No company email addresses in commit metadata
-        if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          # Commits in this pull request must not carry a company address as
-          # author or committer. The addresses are not printed: logs are public.
-          if git log --format='%ae%n%ce' "$BASE..$HEAD" | grep -qi '@zyaku\.com$'; then
-            echo "A commit in this pull request uses a company email address. Use a GitHub noreply address."
+          # No commit may carry a company address as author or committer: the
+          # pull request's commits, or on main the whole history. The
+          # addresses are not printed: logs are public.
+          if [ -n "$BASE" ]; then RANGE="$BASE..$HEAD"; else RANGE="HEAD"; fi
+          if git log --format='%ae%n%ce' "$RANGE" | grep -qi '@zyaku\.com$'; then
+            echo "A commit uses a company email address. Use a GitHub noreply address."
             exit 1
           fi
           echo "commit emails ok"

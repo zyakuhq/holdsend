@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-25 (night of day one)
+Last updated: 2026-10-25 (afternoon, after the notes example)
 
 ## Done
 
@@ -16,6 +16,7 @@ Last updated: 2026-10-25 (night of day one)
 - First independent audit: 21 findings, all fixed or explained, each with a regression test ([audits/2026-10-25-first-independent-audit.md](audits/2026-10-25-first-independent-audit.md)).
 - Second audit pass: 9 new findings (N1 to N9), all fixed or documented, each with a test that fails on the old code. Per-item retry delays, an `unreachable` stop after 24 hours of no answers, growing attempt timeouts, a frozen `hs1:` request fingerprint.
 - Decisions 0001 to 0006.
+- Example: a notes app (Express + Postgres or PGlite, plain browser page, service worker) in [examples/notes](../examples/notes), with browser tests in CI for airplane mode, a lost answer, two tabs, arrival ordering and the offline feed. Reviewed independently; the review's findings were fixed (background sync waits for a busy tab, the worker sends only the signed-in person's notes, keys are required, the outbox actions report what happened).
 
 ## In progress
 
@@ -23,9 +24,9 @@ Last updated: 2026-10-25 (night of day one)
 
 ## Next three tasks
 
-1. Examples: a vanilla web page, a React app and an Express + Postgres server, wired end to end, plus a demo that works in airplane mode.
-2. A 30-second quick start in the README and a small docs site (GitHub Pages, plain Markdown).
-3. Prepare v0.1.0: CHANGELOG, issue templates, "good first issue" labels, package metadata. Publishing to npm needs the `@holdsend` npm organisation and credentials from the project lead.
+1. A React example (a `useOutbox` hook in the example, not a new package yet) and an Expo app over `@holdsend/react-native`.
+2. A small docs site (GitHub Pages, plain Markdown): quick start, the protocol, honest limits, the examples.
+3. Prepare v0.1.0: CHANGELOG, issue templates, "good first issue" labels, package metadata and a publish workflow. Publishing needs the `@holdsend` npm organisation and a token in the repository's secrets (steps were sent to the project lead).
 
 ## After that
 

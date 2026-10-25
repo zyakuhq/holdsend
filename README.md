@@ -35,6 +35,18 @@ Networks fail at the worst moments: in a flood, at a protest, on a train, in a v
 
 How it is tested: [docs/testing.md](docs/testing.md).
 
+## Try it in a minute
+
+A notes app that works in airplane mode and publishes each note once, even when the server's answer is lost or two tabs send together:
+
+```sh
+git clone https://github.com/zyakuhq/holdsend && cd holdsend
+npm install && npm run build
+npm start --workspace holdsend-example-notes   # then open http://localhost:3000
+```
+
+See [examples/notes](examples/notes) for what to try and where each part lives. The same scenarios run in a real browser on every pull request.
+
 ## A first look at the core
 
 ```ts

@@ -1,0 +1,24 @@
+{
+  "name": "holdsend-example-notes",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A notes app that keeps working offline and publishes each note exactly once.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "e2e": "node --test test/e2e.test.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@holdsend/core": "*",
+    "@holdsend/server": "*",
+    "@holdsend/web": "*",
+    "esbuild": "^0.28.2",
+    "express": "^5.1.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
