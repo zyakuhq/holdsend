@@ -75,15 +75,16 @@ export class MemoryIdempotencyStore implements IdempotencyStore<MemoryTx> {
         ? { type: "replay", result: clone(record.result) }
         : { type: "conflict" };
     }
-    // In progress.
+    // In progress. A different request under the same key is a conflict,
+    // even when the claim is stale: the original may still be retried.
+    if (record.requestHash !== input.requestHash) return { type: "conflict" };
     if (now - (record.claimedAt ?? 0) > this.staleClaimMs) {
       const token = newKey();
       record.claimToken = token;
       record.claimedAt = now;
-      record.requestHash = input.requestHash;
       return { type: "claimed", token };
     }
-    return record.requestHash === input.requestHash ? { type: "in_progress" } : { type: "conflict" };
+    return { type: "in_progress" };
   }
 
   async transaction<T>(fn: (tx: MemoryTx) => Promise<T>): Promise<T> {
@@ -147,6 +148,17 @@ export class MemoryIdempotencyStore implements IdempotencyStore<MemoryTx> {
       const staleClaim = record.state === "in_progress" && now - (record.claimedAt ?? 0) > this.staleClaimMs;
       const expired = record.expiresAt !== undefined && record.expiresAt <= now;
       if (staleClaim || expired) {
+        this.records.delete(key);
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  async forgetOwner(owner: string): Promise<number> {
+    let count = 0;
+    for (const key of [...this.records.keys()]) {
+      if ((JSON.parse(key) as [string])[0] === owner) {
         this.records.delete(key);
         count += 1;
       }

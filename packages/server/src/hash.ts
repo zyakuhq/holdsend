@@ -1,47 +1,65 @@
 /**
- * Request hashing. Two requests are "the same request" when their content
- * hashes match. Hash only the content: anything a client sends that is not
- * the content (transport ids, timestamps) must be left out by the caller.
+ * Request fingerprints. Two requests are "the same request" when the
+ * fingerprints of their content match.
  *
- * Uses Web Crypto, so it runs on Node 20+, Deno, Bun and edge runtimes.
+ * The content is first put in canonical form (object keys sorted at every
+ * level), then serialised with the platform's JSON.stringify, then hashed
+ * with SHA-256 through Web Crypto, so this runs on Node 20+, Deno, Bun and
+ * edge runtimes.
+ *
+ * Only plain JSON is accepted. A Map, Set, Date or class instance would
+ * otherwise serialise as "{}" (or a string), and two different requests could
+ * share a fingerprint and be answered with each other's result.
  */
+import { assertPlainJson } from "@holdsend/core";
 
-/** Deterministic JSON: object keys sorted, undefined dropped. */
-export function stableStringify(value: unknown): string {
-  if (value === undefined) return "null";
-  if (value === null || typeof value !== "object") {
-    if (typeof value === "number" && !Number.isFinite(value)) return "null";
-    if (typeof value === "bigint") return JSON.stringify(value.toString());
-    return JSON.stringify(value) ?? "null";
+function sortedCopy(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedCopy);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      const child = (value as Record<string, unknown>)[key];
+      if (child === undefined) continue;
+      // defineProperty keeps a key named "__proto__" as plain data.
+      Object.defineProperty(out, key, { value: sortedCopy(child), enumerable: true, writable: true, configurable: true });
+    }
+    return out;
   }
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => (v === undefined || typeof v === "function" ? "null" : stableStringify(v))).join(",")}]`;
-  }
-  if (typeof (value as { toJSON?: unknown }).toJSON === "function") {
-    return stableStringify((value as { toJSON: () => unknown }).toJSON());
-  }
-  const record = value as Record<string, unknown>;
-  const entries = Object.keys(record)
-    .filter((k) => record[k] !== undefined && typeof record[k] !== "function")
-    .sort()
-    .map((k) => `${JSON.stringify(k)}:${stableStringify(record[k])}`);
-  return `{${entries.join(",")}}`;
+  return value;
 }
 
-interface SubtleLike {
+/**
+ * Canonical JSON text: keys sorted at every level, absent (undefined)
+ * properties dropped. Throws NotJsonError for anything that is not plain JSON.
+ */
+export function canonicalJson(content: unknown): string {
+  assertPlainJson(content, "content");
+  return JSON.stringify(sortedCopy(content));
+}
+
+interface DigestApi {
   digest(algorithm: string, data: Uint8Array): Promise<ArrayBuffer>;
 }
 
-function subtle(): SubtleLike {
-  const c = (globalThis as { crypto?: { subtle?: SubtleLike } }).crypto;
-  if (!c?.subtle) throw new Error("Web Crypto (crypto.subtle) is required to hash requests");
-  return c.subtle;
+function webCrypto(): DigestApi {
+  const subtle = (globalThis as { crypto?: { subtle?: DigestApi } }).crypto?.subtle;
+  if (!subtle) throw new Error("Web Crypto (crypto.subtle) is required to fingerprint requests");
+  return subtle;
 }
 
-/** SHA-256 hex of the operation name and the content. */
-export async function hashRequest(operation: string, content: unknown): Promise<string> {
-  const text = `${operation}\n${stableStringify(content)}`;
+function utf8(text: string): Uint8Array {
   const Encoder = (globalThis as unknown as { TextEncoder: new () => { encode(s: string): Uint8Array } }).TextEncoder;
-  const digest = await subtle().digest("SHA-256", new Encoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return new Encoder().encode(text);
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  let hex = "";
+  for (const byte of new Uint8Array(buffer)) hex += (byte < 16 ? "0" : "") + byte.toString(16);
+  return hex;
+}
+
+/** SHA-256 (hex) of the operation name and the canonical content. */
+export async function hashRequest(operation: string, content: unknown): Promise<string> {
+  const digest = await webCrypto().digest("SHA-256", utf8(`${operation.length}:${operation}|${canonicalJson(content)}`));
+  return toHex(digest);
 }

@@ -50,7 +50,7 @@ export function readHeader(headers: HeaderSource | undefined, name: string): str
 export type KeyRead = { ok: true; key: string | null } | { ok: false };
 
 /** The Idempotency-Key header: absent, valid, or invalid. */
-export function readIdempotencyKey(headers: HeaderSource | undefined): KeyRead {
+export function parseIdempotencyKey(headers: HeaderSource | undefined): KeyRead {
   const raw = readHeader(headers, IDEMPOTENCY_KEY_HEADER);
   if (raw === undefined || raw.trim() === "") return { ok: true, key: null };
   const key = raw.trim();
@@ -58,13 +58,18 @@ export function readIdempotencyKey(headers: HeaderSource | undefined): KeyRead {
 }
 
 /**
- * The written time to store with this request, or null. Accepted only with a
- * valid Idempotency-Key (only queued, replayed requests carry one) and only
- * within the bounds of acceptWrittenAt. Never throws.
+ * The written time to store with this request, or null. Accepted only on a
+ * request with a valid Idempotency-Key, and only within the bounds of
+ * acceptWrittenAt. Never throws.
+ *
+ * Any client can send a key and a Written-At header, so the bounds (at most
+ * two minutes ahead, at most 30 days back, by default) are the real limit.
+ * Store it in its own column, show it as when the author says they wrote it,
+ * and never order a feed by it.
  */
-export function acceptedWrittenAt(headers: HeaderSource | undefined, now: number = Date.now(), bounds?: WrittenAtBounds): number | null {
+export function writtenAtFromRequest(headers: HeaderSource | undefined, now: number = Date.now(), bounds?: WrittenAtBounds): number | null {
   try {
-    const key = readIdempotencyKey(headers);
+    const key = parseIdempotencyKey(headers);
     if (!key.ok || key.key === null) return null;
     return acceptWrittenAt(readHeader(headers, WRITTEN_AT_HEADER), now, bounds);
   } catch {
@@ -95,6 +100,7 @@ export interface HandleOptions<Tx> {
   requireKey?: boolean;
   /** How long to wait for an in-progress duplicate to finish before answering 409. Default 2000 ms. */
   waitMs?: number;
+  /** First delay between looks while waiting; doubles each time, up to 500 ms. Default 50 ms. */
   pollMs?: number;
   now?: () => number;
   writtenAtBounds?: WrittenAtBounds;
@@ -117,11 +123,11 @@ const sleep = (ms: number) => new Promise<void>((resolve) => timers.setTimeout(r
 
 export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<IdempotentAnswer> {
   const now = options.now ?? Date.now;
-  const keyRead = readIdempotencyKey(options.headers);
+  const keyRead = parseIdempotencyKey(options.headers);
   if (!keyRead.ok) {
     return errorAnswer(400, "invalid_key", "Idempotency-Key must be 8 to 128 characters of letters, digits, '_', '-', ':' or '.'.", "invalid_key");
   }
-  const writtenAt = acceptedWrittenAt(options.headers, now(), options.writtenAtBounds);
+  const writtenAt = writtenAtFromRequest(options.headers, now(), options.writtenAtBounds);
 
   if (keyRead.key === null) {
     if (options.requireKey) return errorAnswer(400, "key_required", "This endpoint requires an Idempotency-Key header.", "key_required");
@@ -133,7 +139,7 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
   const record = { owner: options.owner, operation: options.operation, key };
   const requestHash = await hashRequest(options.operation, options.content);
   const waitMs = options.waitMs ?? 2000;
-  const pollMs = Math.max(10, options.pollMs ?? 50);
+  let pollMs = Math.max(10, options.pollMs ?? 50);
   const deadline = now() + waitMs;
 
   for (;;) {
@@ -152,7 +158,8 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
         return errorAnswer(410, ERROR_GONE, "This request was completed once and its result has since been deleted.", "gone");
       case "in_progress":
         if (now() < deadline) {
-          await sleep(pollMs);
+          await sleep(Math.min(pollMs, Math.max(0, deadline - now())));
+          pollMs = Math.min(pollMs * 2, 500);
           continue;
         }
         return errorAnswer(409, ERROR_IN_PROGRESS, "A request with this Idempotency-Key is still being processed.", "in_progress", { "Retry-After": "1" });

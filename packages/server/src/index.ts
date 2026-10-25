@@ -8,7 +8,7 @@ export {
   type StoreOptions,
   type StoredResult,
 } from "./types.js";
-export { hashRequest, stableStringify } from "./hash.js";
+export { canonicalJson, hashRequest } from "./hash.js";
 export { MemoryIdempotencyStore, type MemoryTx } from "./memory-store.js";
 export {
   PostgresIdempotencyStore,
@@ -19,10 +19,10 @@ export {
   type QueryResultLike,
 } from "./postgres-store.js";
 export {
-  acceptedWrittenAt,
   handleIdempotent,
+  parseIdempotencyKey,
   readHeader,
-  readIdempotencyKey,
+  writtenAtFromRequest,
   type CreateResult,
   type HandleOptions,
   type HeaderSource,
