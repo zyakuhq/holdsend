@@ -6,6 +6,8 @@ HoldSend is a small open-source library for apps where people write things that 
 
 > **Status: early, not released.** The core, the server store, and the web and React Native stores are here and tested, including a fault-injection suite and an independent audit (see [docs/audits](docs/audits)). Nothing is published to npm yet, the emergency module is not built, and nothing here is ready for production. This README will say so until it is. See [docs/STATUS.md](docs/STATUS.md).
 
+Docs: https://zyakuhq.github.io/holdsend/
+
 Supported by an Emergent Ventures grant (Mercatus Center).
 
 ## Why
