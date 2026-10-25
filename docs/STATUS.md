@@ -13,24 +13,26 @@ Last updated: 2026-10-25
 - Governance files: LICENSE, NOTICE, README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, GOVERNANCE.
 - CI: lint, typecheck, tests, build, size budget, gitleaks on full history, PII scan with a hashed denylist. Local pre-push hook runs the same scans.
 - Decisions 0002 (core state model) and 0003 (written time in a header).
+- Repository published at https://github.com/zyakuhq/holdsend (2026-10-25). First CI run green: checks, secret and PII scan, and the organisation's CodeQL scan.
 
 ## In progress
 
-- Publishing the repository: waiting for `zyakuhq/holdsend` to be created (the automation account cannot create repositories in the organisation).
+- Nothing open.
 
 ## Next three tasks
 
-1. Push to `zyakuhq/holdsend` once it exists, confirm CI is green, turn on private vulnerability reporting.
-2. `@holdsend/server`: in-memory idempotency store with the full contract (claim, complete in one transaction, replay, conflict, in progress, gone), then the Postgres adapter.
-3. `@holdsend/web`: IndexedDB store with an atomic `update` and the cross-tab lock (Web Locks, with a lease fallback), with concurrency tests.
+1. `@holdsend/server`: in-memory idempotency store with the full contract (claim, complete in one transaction, replay, conflict, in progress, gone), then the Postgres adapter.
+2. `@holdsend/web`: IndexedDB store with an atomic `update` and the cross-tab lock (Web Locks, with a lease fallback), with concurrency tests.
+3. Property-based and fault-injection tests for the core (lost answers, timeouts, double taps, app kill mid-send, clock skew), using fast-check.
 
 ## Blockers
 
-- The repository `zyakuhq/holdsend` must be created by an organisation admin (empty, public, no README or licence), and this automation given push access to it.
+- None. Small open ask for the project lead: turn on private vulnerability reporting (repository Settings, Security, "Private vulnerability reporting"). The automation cannot change repository settings. Until then, SECURITY.md's email route works.
 
 ## Resolved
 
 - 2026-10-25: security@zyaku.com receives mail (confirmed by the project lead).
+- 2026-10-25: `zyakuhq/holdsend` created by the project lead; this automation has push access.
 
 ## Notes for the next session
 
