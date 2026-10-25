@@ -8,7 +8,7 @@ export {
   type StoreOptions,
   type StoredResult,
 } from "./types.js";
-export { canonicalJson, hashRequest } from "./hash.js";
+export { FINGERPRINT_VERSION, canonicalJson, hashRequest } from "./hash.js";
 export { MemoryIdempotencyStore, type MemoryTx } from "./memory-store.js";
 export {
   PostgresIdempotencyStore,

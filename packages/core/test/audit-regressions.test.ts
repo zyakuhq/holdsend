@@ -49,6 +49,7 @@ describe("audit 1: a send that never settles", () => {
     expect(entry?.item.state).toBe("waiting");
     expect(entry?.item.attempts).toBe(0); // no answer: not counted
 
+    await vi.advanceTimersByTimeAsync(1000); // past the first retry delay
     const second = outbox.flush();
     await vi.advanceTimersByTimeAsync(0);
     expect(await second).toMatchObject({ sent: 1 });
@@ -69,9 +70,11 @@ describe("audit 2: an item queued with a key a live attempt already sent", () =>
 describe("audit 3: a network that says it is connected but is not", () => {
   it("does not use up the attempt budget, so the item is sent when the connection really returns", async () => {
     let connected = false;
+    let t = Date.parse("2026-10-25T12:00:00Z");
     const server = new FakeServer();
     const outbox = new Outbox<Payload>({
       store: new MemoryStore(),
+      now: () => t,
       policy: { maxAttempts: 3, claimRenewMs: 0 },
       send: async (item, ctx) => {
         if (!connected) throw new TypeError("Failed to fetch");
@@ -79,7 +82,10 @@ describe("audit 3: a network that says it is connected but is not", () => {
       },
     });
     await outbox.add("post.create", { text: "written on dead Wi-Fi" });
-    for (let n = 0; n < 20; n += 1) await outbox.flush();
+    for (let n = 0; n < 20; n += 1) {
+      await outbox.flush();
+      t += 10 * MIN;
+    }
     expect((await outbox.list())[0]?.status).not.toBe("stuck");
     connected = true;
     expect((await outbox.flush()).sent).toBe(1);
@@ -87,10 +93,14 @@ describe("audit 3: a network that says it is connected but is not", () => {
   });
 
   it("still stops after the budget when the server keeps answering with errors", async () => {
-    const outbox = new Outbox<Payload>({ store: new MemoryStore(), policy: { maxAttempts: 3, claimRenewMs: 0 }, send: async () => classifyResponse(503) });
+    let t = Date.parse("2026-10-25T12:00:00Z");
+    const outbox = new Outbox<Payload>({ store: new MemoryStore(), now: () => t, policy: { maxAttempts: 3, claimRenewMs: 0 }, send: async () => classifyResponse(503) });
     await outbox.add("post.create", { text: "server down" });
     const reports = [];
-    for (let n = 0; n < 5; n += 1) reports.push(await outbox.flush());
+    for (let n = 0; n < 5; n += 1) {
+      reports.push(await outbox.flush());
+      t += 10 * MIN;
+    }
     expect((await outbox.list())[0]?.status).toBe("stuck");
     expect(reports.reduce((s, r) => s + r.stuck, 0)).toBe(1);
   });
@@ -153,7 +163,7 @@ describe("audit 15: approving an old item whose key the server refused", () => {
     const items: OutboxItem[] = [
       { key: "old-key-0001", kind: "k", payload: {}, writtenAt: now - 40 * 24 * 60 * MIN, state: "stuck", stuckReason: "key_conflict", attempts: 1, touched: true },
     ];
-    expect(approve(items, "old-key-0001", now, undefined, () => "new-key-0001")).toBe(true);
+    expect(approve(items, "old-key-0001", now, undefined, () => "new-key-0001")).toEqual({ key: "new-key-0001", newKey: true });
     expect(items[0]).toMatchObject({ key: "new-key-0001", state: "waiting" });
   });
 });

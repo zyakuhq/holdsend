@@ -166,6 +166,13 @@ describe("hashing", () => {
     expect(await hashRequest("op", { a: 1, b: 2 })).toBe(await hashRequest("op", { b: 2, a: 1 }));
     expect(await hashRequest("op", { a: 1 })).not.toBe(await hashRequest("other", { a: 1 }));
   });
+
+  it("keeps the frozen hs1 fingerprint format", async () => {
+    // If this changes, every stored record stops matching: use a new tag instead.
+    expect(await hashRequest("post.create", { text: "hello" })).toBe(
+      "hs1:d522dc874943799449ca6652912e8da08911a63c0127052431219ea00c7aa650",
+    );
+  });
 });
 
 describe("handleIdempotent on Postgres", () => {

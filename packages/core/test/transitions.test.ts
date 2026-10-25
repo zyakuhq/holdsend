@@ -123,7 +123,7 @@ describe("old items", () => {
 
   it("are sent after a person approves, keeping the same key", () => {
     const items = [old()];
-    expect(approve(items, "key-000000001", NOW)).toBe(true);
+    expect(approve(items, "key-000000001", NOW)).toEqual({ key: "key-000000001", newKey: false });
     expect(isSendable(items[0]!, NOW)).toBe(true);
     expect(claim(items, "key-000000001", "t", NOW)?.key).toBe("key-000000001");
   });

@@ -31,6 +31,16 @@ The body is whatever the app sends. HoldSend adds nothing to it.
 
 Records for content that can wait long in a queue should live as long as the content, not a fixed number of days: a retry can arrive weeks later.
 
+## The request fingerprint
+
+`@holdsend/server` stores a fingerprint of each request, so a reused key with different content can be told apart. The format is frozen, because stored fingerprints must keep matching for as long as their records live:
+
+```
+hs1:<hex SHA-256 of UTF-8 "<operation length>:<operation>|<canonical JSON>">
+```
+
+Canonical JSON is the content with object keys sorted at every level and properties whose value is `undefined` left out, serialised with `JSON.stringify`. Only plain JSON is accepted. Any future change to this format gets a new tag (`hs2:` and so on), and stores keep accepting the old tag for records written with it.
+
 ## Response codes the client understands
 
 | Answer | Meaning for the item |

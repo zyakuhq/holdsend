@@ -40,7 +40,7 @@ export {
   isClaimLive,
   isSendable,
   needsConfirmation,
-  nextClaimExpiryMs,
+  nextWakeMs,
   pruneSent,
   renewClaim,
   retry,

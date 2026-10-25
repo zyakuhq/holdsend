@@ -122,3 +122,18 @@ describe("audit 8: a connection the browser closed", () => {
     expect((await store!.read()).map((i) => i.key).sort()).toEqual(["item-key-0001", "item-key-0002"]);
   });
 });
+
+describe("second audit N8: a close event from an old connection", () => {
+  it("does not drop the newer connection", async () => {
+    const [store] = tabs(1, "late-close-event");
+    const internal = store as unknown as { dbPromise: Promise<IDBDatabase> | null };
+    await store!.read();
+    const oldDb = await internal.dbPromise!;
+    internal.dbPromise = null; // as after a reopen
+    await store!.read();
+    const current = internal.dbPromise;
+    expect(current).not.toBeNull();
+    oldDb.onclose?.call(oldDb, new Event("close")); // the old connection's close arrives late
+    expect(internal.dbPromise).toBe(current);
+  });
+});

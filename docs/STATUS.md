@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-25 (evening of day one)
+Last updated: 2026-10-25 (night of day one)
 
 ## Done
 
@@ -14,6 +14,7 @@ Last updated: 2026-10-25 (evening of day one)
 - `@holdsend/react-native`: `KeyValueStore` over AsyncStorage or MMKV (shared update chain, corrupt-data and size guards), native auto-flush.
 - Never-twice, never-lost fault-injection suite (fast-check), checked against deliberately broken code ([testing.md](testing.md)).
 - First independent audit: 21 findings, all fixed or explained, each with a regression test ([audits/2026-10-25-first-independent-audit.md](audits/2026-10-25-first-independent-audit.md)).
+- Second audit pass: 9 new findings (N1 to N9), all fixed or documented, each with a test that fails on the old code. Per-item retry delays, an `unreachable` stop after 24 hours of no answers, growing attempt timeouts, a frozen `hs1:` request fingerprint.
 - Decisions 0001 to 0006.
 
 ## In progress
@@ -48,6 +49,7 @@ Last updated: 2026-10-25 (evening of day one)
 
 ## Notes for the next session
 
+- The never-twice soak at 3000 runs needs `--testTimeout=600000` (the default 30 s is too short for the slow-store case).
 - Never put Zyaku code, data, names or configuration in this repository. Write everything fresh; do not write reference code from memory either (see the audit's clean-room note). Run `npm run check` and gitleaks before every push.
 - Merge by fast-forwarding `main` to the tested pull-request commit (not GitHub's squash merge, which stamps the account email).
 - Repository secret `PII_DENYLIST` (comma-separated plaintext terms) can extend the denylist in CI without publishing it.

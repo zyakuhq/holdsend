@@ -44,6 +44,8 @@ export function isSendable(item: OutboxItem, now: number, policy: Policy = DEFAU
   if (owner !== undefined && item.owner !== undefined && item.owner !== owner) return false;
   if (needsConfirmation(item, now, policy)) return false;
   if (item.attempts >= policy.maxAttempts) return false;
+  // Backing off after a failed attempt, however often flush() is called.
+  if (item.retryAt !== undefined && now < item.retryAt) return false;
   if (item.state === "waiting") return true;
   // A claim nobody renewed: its sender is gone. Take it over, same key.
   if (item.state === "sending") return !isClaimLive(item, now, policy);
@@ -121,20 +123,36 @@ export function settle(items: OutboxItem[], key: string, token: string, outcome:
   delete item.claimedAt;
   delete item.claimToken;
   if (outcome.error) item.lastError = { ...outcome.error };
+  const answered = !(outcome.type === "retry" && outcome.noAnswer);
+  if (answered) delete item.noAnswerSince;
+  if (!(outcome.type === "retry" && outcome.timedOut)) delete item.timeouts;
 
   switch (outcome.type) {
     case "busy":
       // The server is still finishing an earlier attempt. Not this attempt's
-      // fault, so it does not count.
+      // fault, so it does not count; look again shortly.
       item.state = "waiting";
       item.attempts = Math.max(0, item.attempts - 1);
+      item.retryAt = now + (policy.retryDelaysMs[0] ?? 1000);
       return;
-    case "retry":
-      // Nothing came back: the attempt says nothing about the request, only
-      // about the network. It does not use up the budget, so an item written
-      // on a network that only looks connected is still sent by itself when
-      // the connection really returns.
-      if (outcome.noAnswer) item.attempts = Math.max(0, item.attempts - 1);
+    case "retry": {
+      const failures = (item.failures ?? 0) + 1;
+      item.failures = failures;
+      const delays = policy.retryDelaysMs;
+      item.retryAt = now + (delays[Math.min(failures - 1, delays.length - 1)] ?? 60_000);
+      if (outcome.timedOut) item.timeouts = (item.timeouts ?? 0) + 1;
+      if (outcome.noAnswer) {
+        // Nothing came back: this says nothing about the request, only about
+        // the network, so it does not use up the attempt budget. But silence
+        // that lasts longer than giveUpAfterMs is shown to the person.
+        item.attempts = Math.max(0, item.attempts - 1);
+        item.noAnswerSince ??= now;
+        if (now - item.noAnswerSince > policy.giveUpAfterMs) {
+          item.state = "stuck";
+          item.stuckReason = "unreachable";
+          return;
+        }
+      }
       if (item.attempts >= policy.maxAttempts) {
         item.state = "stuck";
         item.stuckReason = "attempts_exhausted";
@@ -142,6 +160,7 @@ export function settle(items: OutboxItem[], key: string, token: string, outcome:
         item.state = "waiting";
       }
       return;
+    }
     case "conflict":
       item.state = "stuck";
       item.stuckReason = "key_conflict";
@@ -181,22 +200,30 @@ export function cancel(items: OutboxItem[], key: string): CancelResult {
  * the same: an earlier attempt may already be on the server, and the same key
  * is what makes the server answer with that original. The one exception is
  * an item whose key the server already refused as a conflict: resending it
- * with that key could only be refused again, so it gets a new one (see
- * `retry` for what that means).
+ * with that key could only be refused again, so it gets a new one, and the
+ * result says so (`newKey: true`, see RetryResult for what that means).
  */
-export function approve(items: OutboxItem[], key: string, now: number, policy: Policy = DEFAULT_POLICY, newKey?: () => string): boolean {
+export function approve(items: OutboxItem[], key: string, now: number, policy: Policy = DEFAULT_POLICY, newKey?: () => string): RetryResult | null {
   const item = find(items, key);
-  if (!item || !needsConfirmation(item, now, policy)) return false;
+  if (!item || !needsConfirmation(item, now, policy)) return null;
   item.approvedAt = now;
-  if (item.state === "stuck" && item.stuckReason === "key_conflict" && newKey) item.key = newKey();
-  if (item.state === "stuck" || item.state === "sending") {
-    item.state = "waiting";
-    delete item.claimedAt;
-    delete item.claimToken;
-    delete item.stuckReason;
-  }
+  const replaced = item.state === "stuck" && item.stuckReason === "key_conflict" && newKey !== undefined;
+  if (replaced) item.key = newKey();
+  freshStart(item);
+  return { key: item.key, newKey: replaced };
+}
+
+/** Clears everything an earlier run of attempts left behind, after a person decided to send again. */
+function freshStart(item: OutboxItem): void {
+  item.state = "waiting";
   item.attempts = 0;
-  return true;
+  delete item.claimedAt;
+  delete item.claimToken;
+  delete item.stuckReason;
+  delete item.retryAt;
+  delete item.failures;
+  delete item.noAnswerSince;
+  delete item.timeouts;
 }
 
 export interface RetryResult {
@@ -224,11 +251,7 @@ export function retry(items: OutboxItem[], key: string, now: number, newKey: () 
   if (!item || statusOf(item, now, policy) !== "stuck") return null;
   const replaced = item.stuckReason === "key_conflict";
   if (replaced) item.key = newKey();
-  item.state = "waiting";
-  item.attempts = 0;
-  delete item.claimedAt;
-  delete item.claimToken;
-  delete item.stuckReason;
+  freshStart(item);
   delete item.lastError;
   return { key: item.key, newKey: replaced };
 }
@@ -257,17 +280,22 @@ export function discard(items: OutboxItem[], key: string, now: number, policy: P
 }
 
 /**
- * When the earliest live claim held by another sender goes stale, in ms from
- * `now`, or undefined if there is none. A flush that skipped such items must
- * look again then: if that sender died, nobody else will.
+ * How long until something waiting may be tried again, in ms from `now`, or
+ * undefined if nothing is waiting on time: the end of an item's backoff, or
+ * the moment another sender's claim goes stale (if that sender died, nobody
+ * else will look at the item again unless a flush runs then).
  */
-export function nextClaimExpiryMs(items: OutboxItem[], now: number, policy: Policy = DEFAULT_POLICY, owner?: string): number | undefined {
+export function nextWakeMs(items: OutboxItem[], now: number, policy: Policy = DEFAULT_POLICY, owner?: string): number | undefined {
   let soonest: number | undefined;
+  const consider = (at: number) => {
+    const inMs = Math.max(0, at - now);
+    if (soonest === undefined || inMs < soonest) soonest = inMs;
+  };
   for (const item of items) {
     if (owner !== undefined && item.owner !== undefined && item.owner !== owner) continue;
-    if (!isClaimLive(item, now, policy) || item.attempts >= policy.maxAttempts) continue;
-    const inMs = (item.claimedAt ?? 0) + policy.staleClaimMs - now + 1;
-    if (soonest === undefined || inMs < soonest) soonest = Math.max(0, inMs);
+    if (item.attempts >= policy.maxAttempts || needsConfirmation(item, now, policy)) continue;
+    if (isClaimLive(item, now, policy)) consider((item.claimedAt ?? 0) + policy.staleClaimMs + 1);
+    else if ((item.state === "waiting" || item.state === "sending") && item.retryAt !== undefined && item.retryAt > now) consider(item.retryAt);
   }
   return soonest;
 }

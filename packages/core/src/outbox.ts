@@ -15,7 +15,7 @@ import {
   claim,
   discard as discardItem,
   isSendable,
-  nextClaimExpiryMs,
+  nextWakeMs,
   pruneSent,
   renewClaim,
   retry as retryItem,
@@ -177,7 +177,8 @@ export class Outbox<P = unknown> {
     return this.change((items) => cancelItem(items, key));
   }
 
-  approve(key: string): Promise<boolean> {
+  /** Approves one item that waited longer than the confirmation age. See RetryResult for `newKey`. */
+  approve(key: string): Promise<RetryResult | null> {
     return this.change((items) => approveItem(items, key, this.now(), this.policy, this.makeKey));
   }
 
@@ -216,31 +217,37 @@ export class Outbox<P = unknown> {
     const run = (async () => {
       const total = emptyReport();
       let next: string | null = owner ?? null;
-      for (;;) {
-        const report = await this.pass(next ?? undefined);
-        total.sent += report.sent;
-        total.retry += report.retry;
-        total.busy += report.busy;
-        total.stuck += report.stuck;
-        if (report.nextCheckInMs !== undefined) {
-          total.nextCheckInMs = Math.min(total.nextCheckInMs ?? Infinity, report.nextCheckInMs);
+      try {
+        for (;;) {
+          const report = await this.pass(next ?? undefined);
+          total.sent += report.sent;
+          total.retry += report.retry;
+          total.busy += report.busy;
+          total.stuck += report.stuck;
+          if (report.nextCheckInMs !== undefined) {
+            total.nextCheckInMs = Math.min(total.nextCheckInMs ?? Infinity, report.nextCheckInMs);
+          }
+          const [following] = this.queued;
+          if (following === undefined) {
+            // Checking the queue and finishing happen in one synchronous
+            // step, so a flush asked for from now on starts a new run
+            // instead of being queued behind one that is already over.
+            this.running = null;
+            return total;
+          }
+          this.queued.delete(following);
+          next = following;
         }
-        const [following] = this.queued;
-        if (following === undefined) break;
-        this.queued.delete(following);
-        next = following;
+      } catch (err) {
+        // Everyone waiting on this run gets the error; nothing stays queued
+        // to ride along on some later, unrelated flush.
+        this.running = null;
+        this.queued.clear();
+        throw err;
       }
-      return total;
     })();
+    // The run cannot have finished yet: it always awaits before returning.
     this.running = run;
-    const clear = () => {
-      if (this.running !== run) return;
-      this.running = null;
-      // A failed run must not leave requests queued behind it: they would
-      // silently ride on a later flush for a different owner.
-      this.queued.clear();
-    };
-    run.then(clear, clear);
     return run;
   }
 
@@ -274,7 +281,7 @@ export class Outbox<P = unknown> {
 
     const waitMs = await this.store.update((items) => {
       pruneSent(items);
-      return nextClaimExpiryMs(items, this.now(), this.policy, owner);
+      return nextWakeMs(items, this.now(), this.policy, owner);
     });
     if (waitMs !== undefined) report.nextCheckInMs = waitMs;
     return report;
@@ -295,17 +302,24 @@ export class Outbox<P = unknown> {
         void this.store.update((items) => renewClaim(items, item.key, token, this.now())).catch(() => undefined);
       }, this.policy.claimRenewMs);
     }
+    // Each attempt abandoned in a row doubles the next timeout (up to 16x),
+    // so a large upload on a slow link gets the time it needs.
+    const timeoutMs = this.policy.attemptTimeoutMs * 2 ** Math.min(item.timeouts ?? 0, 4);
     let timeout: unknown = null;
     const abandoned = new Promise<AttemptOutcome>((resolve) => {
       timeout = timers.setTimeout(() => {
         controller?.abort(new Error("attempt timed out"));
-        resolve({ type: "retry", error: { message: "No answer before the attempt timed out" }, noAnswer: true });
-      }, this.policy.attemptTimeoutMs);
+        resolve({ type: "retry", error: { message: "No answer before the attempt timed out" }, noAnswer: true, timedOut: true });
+      }, timeoutMs);
     });
+    // Promise.resolve().then(...) also catches a send() that throws synchronously.
+    const answer = Promise.resolve()
+      .then(() => this.send(item, context))
+      .catch((err: unknown) => classifyThrown(err));
     try {
       // Whichever comes first: the answer, or the timeout. A send that never
       // settles can no longer hold its item (or this Outbox) forever.
-      return await Promise.race([this.send(item, context).catch((err: unknown) => classifyThrown(err)), abandoned]);
+      return await Promise.race([answer, abandoned]);
     } finally {
       if (renew !== null) timers.clearInterval(renew);
       if (timeout !== null) timers.clearTimeout(timeout);
