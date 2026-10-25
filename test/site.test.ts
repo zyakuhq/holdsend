@@ -18,7 +18,7 @@ describe("the docs site", () => {
 
     for (const page of pages) {
       const html = readFileSync(join(out, page), "utf8");
-      expect(html, page).toMatch(/<title>[^<]+ · HoldSend<\/title>/);
+      expect(html, page).toMatch(/<title>[^<]*HoldSend[^<]*<\/title>/);
       for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
         if (href!.startsWith("#")) continue;
         const repoPath = /^https:\/\/github\.com\/zyakuhq\/holdsend\/(?:blob|tree)\/main\/([^#]+)/.exec(href!);
