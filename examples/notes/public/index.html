@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HoldSend notes example</title>
+    <style>
+      :root {
+        --bg: #f7f6f2;
+        --card: #ffffff;
+        --text: #1d1d1b;
+        --muted: #5f5e58;
+        --line: #dedcd3;
+        --accent: #1f5f8b;
+        --warn: #8a4b00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161614;
+          --card: #1f1f1c;
+          --text: #ecebe6;
+          --muted: #a6a59d;
+          --line: #34332e;
+          --accent: #7db7e0;
+          --warn: #e6a457;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+      main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+      p { margin: 0 0 8px; }
+      .lead, .meta, .hint { color: var(--muted); }
+      .meta, .hint { font-size: 0.875rem; }
+      #connection { font-weight: 600; }
+      #connection[data-online="false"], #durability, #notice { color: var(--warn); }
+      form { display: grid; gap: 8px; margin-top: 16px; }
+      textarea { width: 100%; min-height: 96px; padding: 10px; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+      button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; margin-right: 6px; }
+      button[type="submit"] { background: var(--accent); color: var(--bg); border-color: var(--accent); justify-self: start; }
+      ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+      li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+      .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+      details { margin-top: 28px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HoldSend notes</h1>
+      <p class="lead">Write with or without a connection. Every note is published exactly once.</p>
+      <p id="connection"></p>
+      <p id="durability"></p>
+      <p id="background" class="hint"></p>
+
+      <form id="compose">
+        <label for="text">New note</label>
+        <textarea id="text" maxlength="2000" required></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+
+      <p id="notice" role="status"></p>
+
+      <h2>Waiting on this device</h2>
+      <p id="outbox-empty" class="hint">Nothing waiting.</p>
+      <ul id="outbox"></ul>
+
+      <h2>Published</h2>
+      <p id="feed-note" class="hint"></p>
+      <p id="feed-empty" class="hint">No notes yet.</p>
+      <ul id="feed"></ul>
+
+      <details>
+        <summary>Try to break it</summary>
+        <p class="hint">Turn on airplane mode (or "Offline" in the browser's developer tools), write a few notes, reload the page, then go back online. Open the page in two tabs. Or make the server lose the answer to your next note:</p>
+        <button type="button" id="lose-answer">Lose the answer to my next note</button>
+        <p id="lose-answer-note" class="hint"></p>
+      </details>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
