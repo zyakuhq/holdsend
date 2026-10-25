@@ -42,10 +42,11 @@ Last updated: 2026-10-25 (night of day one)
 - 2026-10-25: security@zyaku.com receives mail (confirmed by the project lead).
 - 2026-10-25: `zyakuhq/holdsend` created by the project lead; this automation has push access.
 - 2026-10-25: private vulnerability reporting is enabled on the repository (confirmed by the project lead).
+- 2026-10-25: at the project lead's request, `main` was rewritten so every commit uses the noreply author address; file contents are unchanged. Old branches and pull-request refs still point at the earlier commits until they are deleted.
 
 ## Open questions for the project lead
 
-- Five early merge commits list a company email address as author. Removing it needs a history rewrite of a public repository; that is the project lead's call. New merges keep the noreply address, and CI blocks company addresses in pull requests.
+- None.
 
 ## Notes for the next session
 
