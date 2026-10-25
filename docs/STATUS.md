@@ -27,7 +27,10 @@ Last updated: 2026-10-25
 ## Blockers
 
 - The repository `zyakuhq/holdsend` must be created by an organisation admin (empty, public, no README or licence), and this automation given push access to it.
-- Confirm that security@zyaku.com receives mail (used in SECURITY.md and CODE_OF_CONDUCT.md).
+
+## Resolved
+
+- 2026-10-25: security@zyaku.com receives mail (confirmed by the project lead).
 
 ## Notes for the next session
 
