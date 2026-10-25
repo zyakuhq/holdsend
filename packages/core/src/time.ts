@@ -25,31 +25,55 @@ export const DEFAULT_WRITTEN_AT_BOUNDS: Readonly<WrittenAtBounds> = Object.freez
   maxAgeMs: 30 * 24 * 60 * 60 * 1000,
 });
 
-/** ISO 8601 date-time with an explicit zone, e.g. 2026-10-25T08:15:00.000Z. */
-const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+const DATE_PART = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+const CLOCK_PART = /^[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,9})?)?$/;
+const OFFSET_PART = /^[+-][0-9]{2}:[0-9]{2}$/;
 
 /**
- * Server side: decides whether a client-claimed written time is kept.
+ * Parses "YYYY-MM-DDTHH:MM[:SS[.fraction]]" followed by "Z" or "+HH:MM" /
+ * "-HH:MM". A time without a zone is refused: it would mean a different
+ * moment on every server.
+ */
+function parseZonedTimestamp(text: string): number | null {
+  if (text.length > 40 || text.charAt(10) !== "T") return null;
+  if (!DATE_PART.test(text.slice(0, 10))) return null;
+  const afterT = text.slice(11);
+  const zoneLength = afterT.endsWith("Z") ? 1 : 6;
+  const zone = afterT.slice(afterT.length - zoneLength);
+  if (zone !== "Z" && !OFFSET_PART.test(zone)) return null;
+  if (!CLOCK_PART.test(afterT.slice(0, afterT.length - zoneLength))) return null;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Server side: decides whether a written time a client claims is kept.
  *
  * Returns epoch ms, or null when the value must be ignored. A bad value never
  * makes the request fail; the item is simply stored without a written time.
  *
- * - Not a zoned ISO 8601 string: ignored.
- * - More than `maxFutureSkewMs` in the future: ignored (a broken clock).
- * - Within the skew: clamped to `now`, so nothing is written after it arrived.
- * - Older than `maxAgeMs`: ignored, so nobody can claim "written last year".
+ * - Not a zoned ISO 8601 timestamp: ignored.
+ * - Later than now plus `maxFutureSkewMs`: ignored (a broken device clock).
+ * - Earlier than now minus `maxAgeMs`: ignored, so nobody can claim
+ *   "written last year".
+ * - Inside the window but after now: treated as now, so nothing is ever
+ *   written after it arrived.
+ *
+ * Any client can send this header, so treat the result as the author's own
+ * claim, show it as such, and never order anything by it.
  */
 export function acceptWrittenAt(
   raw: unknown,
   now: number,
   bounds: WrittenAtBounds = DEFAULT_WRITTEN_AT_BOUNDS,
 ): number | null {
-  if (typeof raw !== "string" || raw.length > 40 || !ISO_WITH_ZONE.test(raw)) return null;
-  const at = Date.parse(raw);
-  if (!Number.isFinite(at)) return null;
-  if (at > now + bounds.maxFutureSkewMs) return null;
-  if (at < now - bounds.maxAgeMs) return null;
-  return Math.min(at, now);
+  if (typeof raw !== "string") return null;
+  const claimed = parseZonedTimestamp(raw);
+  if (claimed === null) return null;
+  const earliest = now - bounds.maxAgeMs;
+  const latest = now + bounds.maxFutureSkewMs;
+  if (claimed < earliest || claimed > latest) return null;
+  return claimed > now ? now : claimed;
 }
 
 /** Client side: the written time as the string the server expects. */

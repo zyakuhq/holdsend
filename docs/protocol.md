@@ -26,7 +26,8 @@ The body is whatever the app sends. HoldSend adds nothing to it.
    - different body hash: `409` with code `key_conflict`;
    - still being processed: `409` with code `in_progress`;
    - created and deleted since: `410` with code `gone`.
-5. If `Written-At` is present and a key is present, keep it only within bounds (see below), in a separate field from the arrival time.
+5. If `Written-At` is present and a key is present, keep it only within bounds (see below), in a separate field from the arrival time. Any client can send it: it is the author's claim, never a fact the server checked.
+6. A different request under a key whose claim is unfinished is a conflict too, even if that claim is old: the original request may still be retried.
 
 Records for content that can wait long in a queue should live as long as the content, not a fixed number of days: a retry can arrive weeks later.
 
@@ -42,6 +43,10 @@ Records for content that can wait long in a queue should live as long as the con
 | Other `4xx` | Refused. Stuck; a person's retry keeps the key. |
 
 The error code is read from a JSON body field `code`. Clients pass it to `classifyResponse(status, code)`.
+
+## Browsers
+
+A browser client on another origin needs CORS to allow `Idempotency-Key` and `Written-At` (`Access-Control-Allow-Headers`) and to expose `Idempotent-Replayed` (`Access-Control-Expose-Headers`).
 
 ## Written time bounds
 

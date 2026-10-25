@@ -3,12 +3,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import {
   MemoryIdempotencyStore,
   PostgresIdempotencyStore,
-  acceptedWrittenAt,
+  canonicalJson,
   handleIdempotent,
   hashRequest,
   postgresSchema,
-  readIdempotencyKey,
-  stableStringify,
+  parseIdempotencyKey,
+  writtenAtFromRequest,
   type MemoryTx,
   type Queryable,
 } from "../src/index.js";
@@ -148,17 +148,21 @@ describe("handleIdempotent", () => {
 
 describe("header helpers", () => {
   it("read Fetch Headers and Node header objects alike", () => {
-    expect(readIdempotencyKey(new Headers({ "Idempotency-Key": "abc-12345" }))).toEqual({ ok: true, key: "abc-12345" });
-    expect(readIdempotencyKey({ "idempotency-key": ["abc-12345"] })).toEqual({ ok: true, key: "abc-12345" });
-    expect(readIdempotencyKey({})).toEqual({ ok: true, key: null });
-    expect(readIdempotencyKey({ "Idempotency-Key": "short" })).toEqual({ ok: false });
-    expect(acceptedWrittenAt({ "Written-At": "2026-10-25T08:15:00Z" }, NOW)).toBeNull();
+    expect(parseIdempotencyKey(new Headers({ "Idempotency-Key": "abc-12345" }))).toEqual({ ok: true, key: "abc-12345" });
+    expect(parseIdempotencyKey({ "idempotency-key": ["abc-12345"] })).toEqual({ ok: true, key: "abc-12345" });
+    expect(parseIdempotencyKey({})).toEqual({ ok: true, key: null });
+    expect(parseIdempotencyKey({ "Idempotency-Key": "short" })).toEqual({ ok: false });
+    expect(writtenAtFromRequest({ "Written-At": "2026-10-25T08:15:00Z" }, NOW)).toBeNull();
   });
 });
 
 describe("hashing", () => {
   it("is stable across key order and ignores undefined", async () => {
-    expect(stableStringify({ b: 1, a: [1, undefined, { d: undefined, c: 2 }] })).toBe('{"a":[1,null,{"c":2}],"b":1}');
+    expect(canonicalJson({ b: 1, a: [1, { d: undefined, c: 2 }] })).toBe('{"a":[1,{"c":2}],"b":1}');
+    expect(canonicalJson(JSON.parse('{"__proto__":{"x":1},"a":2}'))).toBe('{"__proto__":{"x":1},"a":2}');
+    expect(() => canonicalJson({ m: new Map([["a", 1]]) })).toThrow(/content\.m is a Map/);
+    expect(() => canonicalJson({ s: new Set([1]) })).toThrow();
+    expect(await hashRequest("op", { m: {} })).not.toBe(await hashRequest("op", { m: { a: 1 } }));
     expect(await hashRequest("op", { a: 1, b: 2 })).toBe(await hashRequest("op", { b: 2, a: 1 }));
     expect(await hashRequest("op", { a: 1 })).not.toBe(await hashRequest("other", { a: 1 }));
   });

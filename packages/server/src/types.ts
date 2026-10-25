@@ -29,7 +29,12 @@ export interface RecordId {
   key: string;
 }
 
-/** What the server answered the first time. Replayed verbatim for a repeated key. */
+/**
+ * What the server answered the first time. Replayed verbatim for a repeated
+ * key, and kept as long as the record (forever by default). Keep it small:
+ * usually the new resource's id is all a client needs. Do not put the
+ * person's content or other personal data in it unless the client needs it.
+ */
 export interface StoredResult {
   status: number;
   body: unknown;
@@ -103,6 +108,18 @@ export interface IdempotencyStore<Tx = unknown> {
    * cleared, so a tombstone keeps nothing derived from what the person wrote.
    */
   tombstoneResource(tx: Tx, owner: string, operation: string, resourceRef: string): Promise<number>;
-  /** Deletes records whose expiry has passed. Returns how many. */
+  /**
+   * Deletes records whose expiry has passed and claims nobody finished.
+   * Run it on a schedule (for example hourly). Unfinished claims are also
+   * taken over by the next matching request, so purging is housekeeping,
+   * not a correctness requirement. Returns how many records were deleted.
+   */
   purgeExpired(now?: number): Promise<number>;
+  /**
+   * Deletes every record of one owner, including tombstones. Call it when an
+   * account is deleted or a person asks for their data to be erased. After
+   * this, a late retry from that owner's device can create its resource
+   * again, so delete the account (or its credentials) first.
+   */
+  forgetOwner(owner: string): Promise<number>;
 }

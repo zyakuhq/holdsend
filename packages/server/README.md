@@ -50,9 +50,24 @@ app.post("/api/posts", async (req, res) => {
 
 When a post is deleted, call `store.tombstoneResource(tx, owner, "post.create", postId)` inside the delete's transaction.
 
+## Keeping it tidy and private
+
+- **Store a small result.** What `create` returns is kept and replayed for as long as the record lives (forever by default). Usually `{ id }` is enough. Do not put the person's content or other personal data in it unless the client needs it back.
+- **Purge on a schedule.** Run `store.purgeExpired()` every hour or so. It removes expired records and claims nobody finished.
+- **Erase an owner.** When an account is deleted or a person asks for erasure, call `store.forgetOwner(userId)` after the account itself is gone.
+
+## Browsers: CORS
+
+If the client runs on another origin, the server must allow and expose the headers:
+
+```
+Access-Control-Allow-Headers: Content-Type, Idempotency-Key, Written-At
+Access-Control-Expose-Headers: Idempotent-Replayed
+```
+
 ## The written time
 
-`writtenAt` is the time the person wrote the post, from their device, already bounded (at most two minutes ahead, at most 30 days back) and accepted only on keyed requests. Store it in its own column and show it. **Order feeds by arrival time, never by written time.**
+`writtenAt` is the time the author says they wrote the post. It is accepted only on keyed requests and only within bounds (at most two minutes ahead, at most 30 days back), but any client can send it, so treat it as the author's claim. Store it in its own column and show it as such. **Order feeds by arrival time, never by written time.**
 
 ## Stores
 

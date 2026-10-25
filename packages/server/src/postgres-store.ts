@@ -1,9 +1,10 @@
 /**
  * A Postgres idempotency store.
  *
- * Works with any client that has `query(text, params)`: node-postgres (`pg`)
- * Pool or Client, PGlite, and most Postgres drivers with a thin wrapper. No
- * runtime dependency on any of them.
+ * Works with any client that has `query(text, params)` returning `{ rows }`:
+ * node-postgres (`pg`) Pool or Client, PGlite, and other drivers with a thin
+ * wrapper. Every changing statement uses RETURNING, so drivers that report no
+ * row count work too. No runtime dependency on any of them.
  *
  * Create the table once with `postgresSchema()` (or copy the SQL into your
  * migrations).
@@ -17,7 +18,6 @@ import {
   type IdempotencyStore,
   type RecordId,
   type StoreOptions,
-  type StoredResult,
 } from "./types.js";
 
 export interface QueryResultLike {
@@ -57,14 +57,29 @@ function quoteTable(name: string): string {
     .join(".");
 }
 
-function affected(result: QueryResultLike): number {
-  return result.rowCount ?? result.affectedRows ?? result.rows.length;
+/**
+ * Rows a statement touched. Every changing statement here ends in
+ * RETURNING, so the returned rows are the count, whatever the driver reports
+ * as rowCount (some report nothing at all).
+ */
+function touched(result: QueryResultLike): number {
+  return result.rows.length;
+}
+
+/** A short, stable fingerprint of the table name, so index names stay under Postgres's 63-byte limit and never collide. */
+function shortHash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
 }
 
 /** The DDL for the store's table. Idempotent: safe to run on every deploy. */
 export function postgresSchema(table = "holdsend_idempotency"): string {
   const t = quoteTable(table);
-  const base = table.split(".").pop() ?? table;
+  const base = `holdsend_${shortHash(table)}`;
   return `
 CREATE TABLE IF NOT EXISTS ${t} (
   owner         TEXT NOT NULL,
@@ -135,61 +150,60 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
 
   async claim(input: ClaimInput): Promise<ClaimOutcome> {
     const now = new Date(input.now ?? this.clock());
-    // An expired record is treated as absent.
-    await this.db.query(
-      `DELETE FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3 AND expires_at IS NOT NULL AND expires_at <= $4`,
-      [input.owner, input.operation, input.key, now],
-    );
-
-    const token = newKey();
-    const inserted = await this.db.query(
-      `INSERT INTO ${this.t} (owner, operation, key, request_hash, state, claim_token, claimed_at)
-       VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
-       ON CONFLICT (owner, operation, key) DO NOTHING`,
-      [input.owner, input.operation, input.key, input.requestHash, token, now],
-    );
-    if (affected(inserted) === 1) return { type: "claimed", token };
-
-    const found = await this.db.query(
-      `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body
-         FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3`,
-      [input.owner, input.operation, input.key],
-    );
-    const row = found.rows[0] as Row | undefined;
-    // Deleted between our insert and select (released or purged): try once more.
-    if (!row) return this.claimAgain(input);
-
-    if (row.state === "gone") return { type: "gone" };
-    if (row.state === "completed") {
-      if (row.request_hash !== input.requestHash || row.result_status === null) return { type: "conflict" };
-      const result: StoredResult = { status: row.result_status, body: parseBody(row.result_body) };
-      return { type: "replay", result };
-    }
-
-    // In progress. Take over a claim nobody finished, with the same guard
-    // used to complete: the old token must still be the current one.
-    if (now.getTime() - toMs(row.claimed_at) > this.staleClaimMs) {
-      const taken = await this.db.query(
-        `UPDATE ${this.t}
-            SET claim_token = $5, claimed_at = $6, request_hash = $7, updated_at = now()
-          WHERE owner = $1 AND operation = $2 AND key = $3 AND state = 'in_progress' AND claim_token = $4`,
-        [input.owner, input.operation, input.key, row.claim_token, token, now, input.requestHash],
+    // Two rounds at most: the second only after removing an expired record.
+    for (let round = 0; round < 2; round += 1) {
+      const token = newKey();
+      const inserted = await this.db.query(
+        `INSERT INTO ${this.t} (owner, operation, key, request_hash, state, claim_token, claimed_at)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
+         ON CONFLICT (owner, operation, key) DO NOTHING
+         RETURNING 1`,
+        [input.owner, input.operation, input.key, input.requestHash, token, now],
       );
-      if (affected(taken) === 1) return { type: "claimed", token };
-      return { type: "in_progress" };
+      if (touched(inserted) === 1) return { type: "claimed", token };
+
+      const found = await this.db.query(
+        `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body, expires_at
+           FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3`,
+        [input.owner, input.operation, input.key],
+      );
+      const row = found.rows[0] as (Row & { expires_at: Date | string | null }) | undefined;
+      // Released or purged between the insert and the select: try again.
+      if (!row) continue;
+
+      if (row.expires_at !== null && toMs(row.expires_at) <= now.getTime()) {
+        await this.db.query(
+          `DELETE FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3 AND expires_at IS NOT NULL AND expires_at <= $4 RETURNING 1`,
+          [input.owner, input.operation, input.key, now],
+        );
+        continue;
+      }
+      return this.decide(input, row, now);
     }
-    return row.request_hash === input.requestHash ? { type: "in_progress" } : { type: "conflict" };
+    return { type: "in_progress" };
   }
 
-  private async claimAgain(input: ClaimInput): Promise<ClaimOutcome> {
-    const token = newKey();
-    const inserted = await this.db.query(
-      `INSERT INTO ${this.t} (owner, operation, key, request_hash, state, claim_token, claimed_at)
-       VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
-       ON CONFLICT (owner, operation, key) DO NOTHING`,
-      [input.owner, input.operation, input.key, input.requestHash, token, new Date(input.now ?? this.clock())],
-    );
-    return affected(inserted) === 1 ? { type: "claimed", token } : { type: "in_progress" };
+  private async decide(input: ClaimInput, row: Row, now: Date): Promise<ClaimOutcome> {
+    if (row.state === "gone") return { type: "gone" };
+    if (row.request_hash !== input.requestHash) return { type: "conflict" };
+    if (row.state === "completed") {
+      if (row.result_status === null) return { type: "conflict" };
+      return { type: "replay", result: { status: row.result_status, body: parseBody(row.result_body) } };
+    }
+    // In progress with the same request. Take over a claim nobody finished,
+    // with the same guard completion uses: the old token must still be current.
+    if (now.getTime() - toMs(row.claimed_at) > this.staleClaimMs) {
+      const token = newKey();
+      const taken = await this.db.query(
+        `UPDATE ${this.t}
+            SET claim_token = $5, claimed_at = $6, updated_at = now()
+          WHERE owner = $1 AND operation = $2 AND key = $3 AND state = 'in_progress' AND claim_token = $4
+          RETURNING 1`,
+        [input.owner, input.operation, input.key, row.claim_token, token, now],
+      );
+      if (touched(taken) === 1) return { type: "claimed", token };
+    }
+    return { type: "in_progress" };
   }
 
   transaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
@@ -202,7 +216,8 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
       `UPDATE ${this.t}
           SET state = 'completed', claim_token = NULL, result_status = $5, result_body = $6::jsonb,
               resource_ref = $7, expires_at = $8, updated_at = now()
-        WHERE owner = $1 AND operation = $2 AND key = $3 AND state = 'in_progress' AND claim_token = $4`,
+        WHERE owner = $1 AND operation = $2 AND key = $3 AND state = 'in_progress' AND claim_token = $4
+        RETURNING 1`,
       [
         input.owner,
         input.operation,
@@ -214,7 +229,7 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
         expiresAt,
       ],
     );
-    if (affected(updated) !== 1) throw new ClaimLostError();
+    if (touched(updated) !== 1) throw new ClaimLostError();
   }
 
   async release(id: RecordId, token: string): Promise<void> {
@@ -229,10 +244,11 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
       `UPDATE ${this.t}
           SET state = 'gone', request_hash = '', result_status = NULL, result_body = NULL,
               expires_at = NULL, updated_at = now()
-        WHERE owner = $1 AND operation = $2 AND resource_ref = $3 AND state = 'completed'`,
+        WHERE owner = $1 AND operation = $2 AND resource_ref = $3 AND state = 'completed'
+        RETURNING 1`,
       [owner, operation, resourceRef],
     );
-    return affected(updated);
+    return touched(updated);
   }
 
   async purgeExpired(now: number = this.clock()): Promise<number> {
@@ -241,10 +257,16 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
     const deleted = await this.db.query(
       `DELETE FROM ${this.t}
         WHERE (expires_at IS NOT NULL AND expires_at <= $1)
-           OR (state = 'in_progress' AND claimed_at < $2)`,
+           OR (state = 'in_progress' AND claimed_at < $2)
+        RETURNING 1`,
       [at, staleBefore],
     );
-    return affected(deleted);
+    return touched(deleted);
+  }
+
+  async forgetOwner(owner: string): Promise<number> {
+    const deleted = await this.db.query(`DELETE FROM ${this.t} WHERE owner = $1 RETURNING 1`, [owner]);
+    return touched(deleted);
   }
 }
 
