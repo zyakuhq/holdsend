@@ -97,9 +97,11 @@ describe("KeyValueStore", () => {
     const mmkv = fakeMmkv();
     expect(fromMmkv(mmkv)).toBe(fromMmkv(mmkv));
     const server = new FakeServer();
-    const outbox = new Outbox<Payload>({ store: new KeyValueStore(fromMmkv(mmkv)), send: server.sender({ loseResponses: 1 }), policy: { claimRenewMs: 0 } });
+    let now = Date.parse("2026-10-25T12:00:00Z");
+    const outbox = new Outbox<Payload>({ store: new KeyValueStore(fromMmkv(mmkv)), now: () => now, send: server.sender({ loseResponses: 1 }), policy: { claimRenewMs: 0 } });
     await outbox.add("post.create", { text: "mmkv" });
     await outbox.flush();
+    now += 1000; // past the first retry delay
     await outbox.flush();
     expect(server.created).toHaveLength(1);
     expect(JSON.parse(mmkv.data.get("holdsend:outbox")!)).toEqual([]);
@@ -172,5 +174,23 @@ describe("audit 11: a queue too large for Android's AsyncStorage", () => {
     expect((await store.read()).map((i) => i.key)).toEqual(["item-key-0001"]);
     const unlimited = new KeyValueStore<Payload>(fakeAsyncStorage(), { maxBytes: Infinity });
     await unlimited.update((items) => void items.push({ ...item("item-key-0003"), payload: { text: "x".repeat(10_000) } }));
+  });
+});
+
+describe("second audit N2: an outbox at the size limit", () => {
+  it("still lets items be sent, settled and removed, and only refuses new ones", async () => {
+    const { OutboxTooLargeError } = await import("../src/index.js");
+    const storage = fakeAsyncStorage();
+    const big = { ...item("item-key-0001"), payload: { text: "x".repeat(1_900) } };
+    await new KeyValueStore<Payload>(storage, { maxBytes: Infinity }).update((items) => void items.push(big));
+    // The limit is now below what is stored (for example after an app update lowered it).
+    const store = new KeyValueStore<Payload>(storage, { maxBytes: 1_000 });
+    await store.update((items) => {
+      items[0]!.attempts += 1; // a claim or settle grows nothing
+    });
+    expect((await store.read())[0]?.attempts).toBe(1);
+    await expect(store.update((items) => void items.push(item("item-key-0002")))).rejects.toBeInstanceOf(OutboxTooLargeError);
+    await store.update((items) => void items.splice(0, 1));
+    expect(await store.read()).toEqual([]);
   });
 });

@@ -196,6 +196,7 @@ async function runHistory(steps: Step[], fates: Fate[], makeStore: () => Store<P
     for (const entry of await final.list()) if (entry.status === "stuck") await final.retry(entry.item.key);
     await final.flush("person-a");
     if ((await final.list()).length === 0) break;
+    clock += 10 * MIN; // past any retry delay before the next round
   }
 
   // ---- invariants -------------------------------------------------------------

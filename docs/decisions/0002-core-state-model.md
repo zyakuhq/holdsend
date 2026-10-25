@@ -29,6 +29,13 @@ Date: 2026-10-25. Status: accepted.
 - Payloads must be plain JSON and are checked when added.
 - `flush` reports `nextCheckInMs` when another sender holds items, and the scheduler looks again then.
 
+## Amended 2026-10-25 after the second audit pass
+
+- Each item waits before its next try (`retryDelaysMs`, from one second growing to five minutes), so a flush asked for again at once, or from a change listener, does not resend it.
+- Attempts with no answer still do not count against `maxAttempts`, but they no longer go on forever: after `giveUpAfterMs` (default 24 hours) of nothing but no-answers, the item becomes stuck as `unreachable` and the person decides. Any answer from the server resets that clock.
+- Each attempt abandoned at its timeout doubles the next one (up to 16 times `attemptTimeoutMs`), so an upload slower than the timeout can still finish.
+- `approve` reports `{ key, newKey }` like `retry`, because approving an item whose key was refused gives it a new key.
+
 ## Consequences
 
 - Platform stores must implement a real atomic `update`. A store that loses a write breaks exactly-once on the client side; the server key still prevents duplicates, but cancel and status would be wrong. Each platform package will ship its own concurrency tests.

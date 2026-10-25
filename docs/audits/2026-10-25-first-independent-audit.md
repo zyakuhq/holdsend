@@ -36,3 +36,22 @@ The project's rule is that HoldSend is written from scratch and copies nothing f
 
 - Earlier merge commits carry a company email address as author. Removing it means rewriting published history, which is the project lead's decision.
 - Two tabs can both win the localStorage lease in a rare race on browsers without Web Locks. Claims and the server key make this safe; it only costs a duplicate request.
+
+## Second pass (same day)
+
+A second independent pass checked every fix above: 14 confirmed fixed, 6 partly fixed, and 1 left unchanged by decision (the earlier commit emails). It also found nine new issues. All nine are now fixed or documented, each with a test that fails on the code before its fix.
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| N1 | Medium-high | Attempts with no answer retried forever with no sign to the person, and an upload slower than the timeout was abandoned and restarted forever | Per-item retry delays; after 24 hours of no answers the item is stuck as `unreachable`; each timed-out attempt doubles the next timeout |
+| N2 | Medium | Near the React Native size limit, even updates that send or remove items were refused, so a full outbox could never drain | Only updates that add items are refused for size |
+| N3 | Medium | A flush asked for in the moment a running flush finished could be dropped | Finishing and checking the queue happen in one synchronous step |
+| N4 | Medium | A `send` function that threw before returning a promise broke the flush | Treated as no answer |
+| N5 | Medium | Calling `flush` from a change listener resent a failing item in a tight loop | Per-item retry delays (see N1) |
+| N6 | Low | The Background Sync docs did not say the browser gives up after a few tries | Docs explain `lastChance` and registering again from the page |
+| N7 | Low | The request fingerprint format was not fixed, so a later change would turn every stored record into a conflict | Versioned (`hs1:`), frozen and documented, with a fixed test vector |
+| N8 | Low | A late close event from an old IndexedDB connection could drop the newer one | Only the connection that closed is forgotten |
+| N9 | Low | `approve` changed an item's key without saying so | It returns `{ key, newKey }` |
+
+Also from the second pass: a sentence in the reference notes overstated what a key conflict proves (corrected), and claim renewal during a long attempt had no test (added, with fake timers).
+

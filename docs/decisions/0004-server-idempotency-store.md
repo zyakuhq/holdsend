@@ -13,6 +13,7 @@ Exactly-once publishing needs the server: a client can only promise one key per 
 - A claim not finished within `staleClaimMs` (default five minutes) can be taken over. This is safe because the dead owner never committed: its completion would fail on the token and roll its write back.
 - Completed records are kept forever by default. A TTL is available for operations whose retries cannot arrive late.
 - Deleting a resource turns its record into a tombstone that answers `410 gone`. The tombstone keeps no request hash and no result.
+- The request fingerprint has a versioned, frozen format (`hs1:` plus a SHA-256), written down in [protocol.md](../protocol.md). Changing it would make every stored record look like a conflict, so a change means a new tag, never an edit. (Added 2026-10-25 after the second audit pass.)
 - Stores share one interface and one contract test suite. Postgres is tested against a real Postgres engine (PGlite), not a mock.
 - No runtime dependency on a database driver: anything with `query(text, params)` works.
 

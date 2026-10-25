@@ -138,6 +138,7 @@ export class KeyValueStore<P = unknown> implements Store<P> {
   update<T>(fn: (items: OutboxItem<P>[]) => T): Promise<T> {
     const run = chainFor(this.backend, this.key).then(async () => {
       const items = parse<P>(await this.backend.getItem(this.key));
+      const countBefore = items.length;
       const value = fn(items);
       if (value instanceof Promise) throw new TypeError("Store.update callbacks must be synchronous");
       const keys = new Set<string>();
@@ -147,7 +148,10 @@ export class KeyValueStore<P = unknown> implements Store<P> {
       }
       const text = JSON.stringify(items);
       const bytes = utf8Bytes(text);
-      if (bytes > this.maxBytes) throw new OutboxTooLargeError(bytes, this.maxBytes);
+      // Only an update that adds items is refused for size. Updates that send,
+      // settle or remove items must still go through when the outbox is near
+      // the limit, or a full outbox could never drain.
+      if (bytes > this.maxBytes && items.length > countBefore) throw new OutboxTooLargeError(bytes, this.maxBytes);
       await this.backend.setItem(this.key, text);
       return value;
     });

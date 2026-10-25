@@ -53,7 +53,12 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
 
   private open(): Promise<IDBDatabase> {
     if (!this.dbPromise) {
-      this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      // Handlers below forget the cached connection only if it is still this
+      // one, so a late close event from an old connection cannot drop a newer one.
+      const forget = () => {
+        if (this.dbPromise === opening) this.dbPromise = null;
+      };
+      const opening: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
         const request = this.factory.open(this.name, VERSION);
         request.onupgradeneeded = () => {
           const db = request.result;
@@ -65,22 +70,21 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
           // Another tab upgrading the schema: step aside so it can, and reopen next time.
           db.onversionchange = () => {
             db.close();
-            this.dbPromise = null;
+            forget();
           };
           // The browser closed the connection (iOS Safari does this after the
           // app was in the background, or when storage is cleared): reopen
           // next time instead of failing every write from now on.
-          db.onclose = () => {
-            this.dbPromise = null;
-          };
+          db.onclose = forget;
           resolve(db);
         };
         request.onerror = () => reject(request.error ?? new Error("could not open IndexedDB"));
         request.onblocked = () => reject(new Error("IndexedDB open is blocked by another tab"));
       }).catch((err) => {
-        this.dbPromise = null;
+        forget();
         throw err;
       });
+      this.dbPromise = opening;
     }
     return this.dbPromise;
   }
@@ -97,7 +101,7 @@ export class IndexedDbStore<P = unknown> implements Store<P> {
     } catch (err) {
       const name = (err as { name?: unknown } | null)?.name;
       if (name !== "InvalidStateError" && name !== "UnknownError") throw err;
-      this.dbPromise = null;
+      if (this.dbPromise && (await this.dbPromise.catch(() => null)) === db) this.dbPromise = null;
       return (await this.open()).transaction(stores, mode);
     }
   }

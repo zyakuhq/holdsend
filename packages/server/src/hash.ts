@@ -58,8 +58,18 @@ function toHex(buffer: ArrayBuffer): string {
   return hex;
 }
 
-/** SHA-256 (hex) of the operation name and the canonical content. */
+/**
+ * Version tag of the fingerprint format. Stored fingerprints carry it, so a
+ * future format can be told apart from this one. The format is frozen: any
+ * change gets a new tag (see docs/protocol.md).
+ */
+export const FINGERPRINT_VERSION = "hs1";
+
+/**
+ * Fingerprint of one request: `hs1:` followed by the SHA-256 (hex) of
+ * `<operation length>:<operation>|<canonical JSON of the content>`, UTF-8 encoded.
+ */
 export async function hashRequest(operation: string, content: unknown): Promise<string> {
   const digest = await webCrypto().digest("SHA-256", utf8(`${operation.length}:${operation}|${canonicalJson(content)}`));
-  return toHex(digest);
+  return `${FINGERPRINT_VERSION}:${toHex(digest)}`;
 }

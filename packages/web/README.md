@@ -47,7 +47,7 @@ async function publish(text: string) {
 
 Only Chromium browsers implement Background Sync. Safari (including every browser on iOS) and Firefox do not. `requestBackgroundSync()` returns `"background"` only after a registration actually succeeded, and `"open_app"` otherwise. Show the person which one they got when they press Send. For urgent messages on `"open_app"` devices, offer another route, such as SMS.
 
-In the service worker, `onBackgroundSync(event, flush)` rejects when the flush left items waiting, so the browser wakes the worker again later instead of treating the sync as done. The worker has no session of its own: when the person signs in, keep their owner id (and whatever your `send` needs to authenticate) in IndexedDB for the worker to read.
+In the service worker, `onBackgroundSync(event, flush)` rejects when the flush left items waiting, so the browser wakes the worker again later instead of treating the sync as done. The browser only does this a few times (Chrome: about three, with growing gaps; `event.lastChance` is true on the last one) and then drops the sync. So register again with `requestBackgroundSync()` whenever the app opens or comes back online with items still waiting, and do not tell the person a message will go "in the background" once the last chance has passed. The worker has no session of its own: when the person signs in, keep their owner id (and whatever your `send` needs to authenticate) in IndexedDB for the worker to read.
 
 ## Licence
 

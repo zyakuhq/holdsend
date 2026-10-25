@@ -21,7 +21,13 @@ export type StuckReason =
   /** The server holds a DIFFERENT request under this key. Retrying needs a new key. */
   | "key_conflict"
   /** The server refused the request itself (validation, size, policy). */
-  | "refused";
+  | "refused"
+  /**
+   * No answer at all for longer than policy.giveUpAfterMs: something keeps
+   * failing before the server answers (an app bug, a blocked request, a
+   * wrong address). Shown to the person instead of retrying silently.
+   */
+  | "unreachable";
 
 export interface ItemError {
   code?: string;
@@ -69,6 +75,14 @@ export interface OutboxItem<P = unknown> {
   lastError?: ItemError;
   /** When the server confirmed it (epoch ms, device clock). */
   sentAt?: number;
+  /** Earliest time the next automatic attempt may start (backoff after a failed attempt). */
+  retryAt?: number;
+  /** Failed attempts in a row, answered or not; sets the backoff. */
+  failures?: number;
+  /** When the current run of attempts with no answer began. Cleared by any answer. */
+  noAnswerSince?: number;
+  /** Attempts abandoned at the timeout in a row; each doubles the next timeout. */
+  timeouts?: number;
 }
 
 export interface Policy {
@@ -95,9 +109,23 @@ export interface Policy {
    * fires and it counts as "no answer". The item is tried again later with
    * the same key, so a late arrival on the server is still one copy. Without
    * this, a request that hangs forever would hold its item, and every later
-   * flush, forever. Default 2 minutes; raise it for very large uploads.
+   * flush, forever. Each abandoned attempt doubles the next one's timeout (up
+   * to 16 times this), so a large upload on a slow link gets the time it
+   * needs instead of restarting from zero forever. Default 2 minutes.
    */
   attemptTimeoutMs: number;
+  /**
+   * Waits between failed attempts of one item, in order; the last repeats.
+   * Applies however often flush() is called. Default 1s, 5s, 15s, 30s, 1m,
+   * 2m, 5m.
+   */
+  retryDelaysMs: number[];
+  /**
+   * Attempts with no answer do not use up `maxAttempts` (they say nothing
+   * about the request). But if nothing has answered for this long, the item
+   * becomes stuck ("unreachable") so a person sees it. Default 24 hours.
+   */
+  giveUpAfterMs: number;
 }
 
 export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
@@ -106,6 +134,8 @@ export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
   claimRenewMs: 30 * 1000,
   confirmAfterMs: 30 * 24 * 60 * 60 * 1000,
   attemptTimeoutMs: 2 * 60 * 1000,
+  retryDelaysMs: [1_000, 5_000, 15_000, 30_000, 60_000, 120_000, 300_000],
+  giveUpAfterMs: 24 * 60 * 60 * 1000,
 });
 
 /**
@@ -120,7 +150,7 @@ export type AttemptOutcome =
    * (offline, timeout, connection reset): such attempts do not use up the
    * item's attempt budget. Server answers like 5xx or 429 do.
    */
-  | { type: "retry"; error?: ItemError; noAnswer?: boolean }
+  | { type: "retry"; error?: ItemError; noAnswer?: boolean; timedOut?: boolean }
   /** The server is still processing an earlier attempt with this key. Not counted. */
   | { type: "busy"; error?: ItemError }
   /** The server holds a different request under this key. Final for this key. */

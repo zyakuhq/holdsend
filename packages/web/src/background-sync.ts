@@ -70,6 +70,12 @@ function workRemains(report: unknown): boolean {
  * answer, server busy, held by another sender) therefore rejects here, so
  * the browser wakes the worker again instead of giving up.
  *
+ * The browser retries only a few times (Chrome: about three, with growing
+ * gaps) and then drops the sync; `event.lastChance` is true on the final
+ * try. After that nothing wakes the worker until the page registers again,
+ * so call `requestBackgroundSync()` each time the app opens or regains a
+ * connection while items are waiting.
+ *
  *   // The worker has no session of its own: keep the signed-in owner in
  *   // IndexedDB when the person signs in, and read it here.
  *   self.addEventListener("sync", (event) =>

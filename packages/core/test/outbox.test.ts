@@ -48,7 +48,7 @@ describe("Outbox", () => {
   });
 
   it("creates exactly one copy when the first answer is lost", async () => {
-    const { outbox, server } = setup({ loseResponses: 1 });
+    const { outbox, server, time } = setup({ loseResponses: 1 });
     await outbox.add("post.create", { text: "answer lost" });
 
     const first = await outbox.flush();
@@ -56,6 +56,7 @@ describe("Outbox", () => {
     expect(server.created).toHaveLength(1);
     expect(await outbox.list()).toHaveLength(1);
 
+    time.advance(1000); // past the first retry delay
     const second = await outbox.flush();
     expect(second.sent).toBe(1);
     expect(server.requests).toBe(2);
@@ -96,7 +97,7 @@ describe("Outbox", () => {
   });
 
   it("waits for the server to finish an earlier attempt without spending one", async () => {
-    const { outbox, server } = setup();
+    const { outbox, server, time } = setup();
     const item = await outbox.add("post.create", { text: "slow server" });
     server.holdInProgress(item.key);
     const report = await outbox.flush();
@@ -104,6 +105,7 @@ describe("Outbox", () => {
     const [entry] = await outbox.list();
     expect(entry?.item.attempts).toBe(0);
     server.release(item.key);
+    time.advance(1000);
     expect((await outbox.flush()).sent).toBe(1);
     expect(server.created).toHaveLength(1);
   });
@@ -116,7 +118,7 @@ describe("Outbox", () => {
     expect((await outbox.flush()).sent).toBe(0);
     expect((await outbox.list())[0]?.status).toBe("needs_confirmation");
 
-    expect(await outbox.approve(item.key)).toBe(true);
+    expect(await outbox.approve(item.key)).toEqual({ key: item.key, newKey: false });
     expect((await outbox.flush()).sent).toBe(1);
     expect(server.created[0]?.key).toBe(item.key);
   });
@@ -139,13 +141,18 @@ describe("Outbox", () => {
 
   it("stops after the attempt budget and keeps the item for a person", async () => {
     const store = new MemoryStore<Payload>();
+    const time = clock();
     const outbox = new Outbox<Payload>({
       store,
+      now: time.now,
       send: async () => classifyResponse(503),
       policy: { maxAttempts: 3, claimRenewMs: 0 },
     });
     await outbox.add("post.create", { text: "never lands" });
-    for (let n = 0; n < 5; n += 1) await outbox.flush();
+    for (let n = 0; n < 5; n += 1) {
+      await outbox.flush();
+      time.advance(10 * 60 * 1000); // past any retry delay
+    }
     const [entry] = await outbox.list();
     expect(entry?.status).toBe("stuck");
     expect(entry?.item.attempts).toBe(3);

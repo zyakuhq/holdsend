@@ -24,7 +24,7 @@ HoldSend's behaviour follows the offline publishing that Zyaku already runs in p
 
 **Cancel is only for what never left.** An item that has been attempted even once may exist on the server (the answer may have been lost). Removing the local copy would throw away the same-key retry that settles it, and "it won't be sent" would be untrue. So only an untouched item can be cancelled; anything else shows as sending and is finished.
 
-**The one time a key changes.** If the server says the key already holds a different request, retrying with that key can never succeed, and the server has proved nothing was created for this content under it. Only then, and only when the person asks to try again, does the item get a new key.
+**The one time a key changes.** If the server says the key already holds a different request, retrying with that key can never succeed: the server will only ever answer it with the other request's result. Only then, and only when the person asks to try again, does the item get a new key.
 
 **Not durable means say so.** Some private browsing modes have no durable storage. The reference probes storage with a write and read-back, keeps an in-memory mirror so items still send while the tab is open, and tells the person that closing the tab will lose what is waiting.
 
