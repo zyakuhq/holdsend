@@ -5,7 +5,11 @@
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
 
-const BUDGETS = [{ name: "@holdsend/core", entry: "packages/core/dist/index.js", gzipBytes: 4 * 1024 }];
+const BUDGETS = [
+  { name: "@holdsend/core", entry: "packages/core/dist/index.js", gzipBytes: 4 * 1024 },
+  // Measured with the parts of core it imports bundled in.
+  { name: "@holdsend/web", entry: "packages/web/dist/index.js", gzipBytes: 7 * 1024 },
+];
 
 let failed = false;
 for (const { name, entry, gzipBytes } of BUDGETS) {

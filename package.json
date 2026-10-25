@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/core",
-    "packages/server"
+    "packages/server",
+    "packages/web"
   ],
   "engines": {
     "node": ">=20"
