@@ -3,24 +3,9 @@
 import { Outbox } from "@holdsend/core";
 import { SenderLock, createWebStore, requestBackgroundSync, requestPersistentStorage, startAutoFlush } from "@holdsend/web";
 import { OUTBOX_NAME, SENDER_LOCK, sendNote } from "./send.mjs";
-import { writeSignedInOwner } from "./session.mjs";
+import { demoUser, writeSignedInOwner } from "./session.mjs";
 
 const $ = (id) => document.getElementById(id);
-
-/** The demo's stand-in for signing in: a random id kept in this browser. */
-function demoUser() {
-  const make = () => `demo-${crypto.randomUUID()}`;
-  try {
-    let id = localStorage.getItem("holdsend-notes-user");
-    if (!id) {
-      id = make();
-      localStorage.setItem("holdsend-notes-user", id);
-    }
-    return id;
-  } catch {
-    return make();
-  }
-}
 
 const owner = demoUser();
 await writeSignedInOwner(owner); // so the service worker sends only this person's notes
@@ -102,8 +87,13 @@ const actions = {
   },
 };
 
+/** A short preview of a note, to tell screen-reader users which note a button acts on. */
+function preview(text) {
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+}
+
 function button(label, action, item) {
-  return el("button", { type: "button", onclick: () => act(() => actions[action](item)) }, label);
+  return el("button", { type: "button", "aria-label": `${label}: ${preview(item.payload.text)}`, onclick: () => act(() => actions[action](item)) }, label);
 }
 
 async function renderOutbox() {

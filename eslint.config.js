@@ -22,8 +22,8 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["examples/**/src/client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs"],
-    languageOptions: { globals: globals.browser },
+    files: ["examples/**/src/client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs", "examples/react/src/**/*.{js,jsx}"],
+    languageOptions: { globals: globals.browser, parserOptions: { ecmaFeatures: { jsx: true } } },
   },
   {
     files: ["examples/**/src/sw.mjs"],

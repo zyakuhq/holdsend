@@ -9,7 +9,8 @@
     "packages/server",
     "packages/web",
     "packages/react-native",
-    "examples/notes"
+    "examples/notes",
+    "examples/react"
   ],
   "engines": {
     "node": ">=20"
@@ -23,7 +24,7 @@
     "scan:pii": "node scripts/pii-scan.mjs",
     "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run scan:pii",
     "test:soak": "HOLDSEND_RUNS=3000 vitest run never-twice",
-    "e2e": "npm run e2e --workspace holdsend-example-notes"
+    "e2e": "npm run e2e --workspace holdsend-example-notes && npm run e2e --workspace holdsend-example-react"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
