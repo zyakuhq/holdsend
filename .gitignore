@@ -7,3 +7,4 @@ coverage/
 .env.*
 # Private, never committed: extra terms for the local PII scan (one per line).
 .pii-denylist
+site/
