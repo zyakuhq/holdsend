@@ -33,6 +33,17 @@ A test that passes against broken code proves nothing. Each of these deliberate 
 | Completion not guarded by the claim token (Postgres) | store contract suite |
 | IndexedDB read and write in separate transactions | web concurrency test |
 | React Native stores not sharing one update chain | React Native concurrency test |
+| Items queued after a live attempt can be cancelled | never-twice suite (a cancelled item created) |
+| IndexedDB connection not reopened after the browser closes it | web reconnection test |
+| Background sync reports success while items still wait | web background-sync test |
+
+## Real Postgres
+
+`packages/server/test/real-postgres.test.ts` runs in CI against a Postgres 16 server with a pool of ten connections: sixty concurrent copies of one request must create one row, and twenty concurrent takeovers of a stale claim must produce one winner while the old owner's commit fails. Locally it runs when `HOLDSEND_PG_URL` is set.
+
+## Audit regressions
+
+`packages/*/test/audit-regressions.test.ts` hold one test per finding of the [first independent audit](audits/2026-10-25-first-independent-audit.md). Each was run against the code before its fix and failed there.
 
 ## Other suites
 

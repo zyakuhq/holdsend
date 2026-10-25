@@ -4,7 +4,7 @@
 
 HoldSend is a small open-source library for apps where people write things that must not be lost: posts, reports, field notes, messages. It keeps what a person writes on the device while there is no connection, and publishes it once when the connection returns. Not zero times. Not twice. Even when answers get lost, someone taps twice, two tabs are open, or the app is killed halfway through a send.
 
-> **Status: early.** The core state machine and its tests are in this repository today. Storage adapters, the server package and the emergency module are being built in the open. Nothing here is ready for production yet, and this README says so until it is. See [docs/STATUS.md](docs/STATUS.md).
+> **Status: early, not released.** The core, the server store, and the web and React Native stores are here and tested, including a fault-injection suite and an independent audit (see [docs/audits](docs/audits)). Nothing is published to npm yet, the emergency module is not built, and nothing here is ready for production. This README will say so until it is. See [docs/STATUS.md](docs/STATUS.md).
 
 Supported by an Emergent Ventures grant (Mercatus Center).
 
@@ -27,10 +27,13 @@ Networks fail at the worst moments: in a flood, at a protest, on a train, in a v
 
 | Package | What | State |
 | --- | --- | --- |
-| [`@holdsend/core`](packages/core) | Outbox state machine, keys, written-time rules, wire protocol. No runtime dependencies. | Working, tested, unreleased |
-| `@holdsend/web` | IndexedDB store, cross-tab lock, Background Sync helper | Roadmap |
-| `@holdsend/react-native` | AsyncStorage and MMKV stores | Roadmap |
-| `@holdsend/server` | Idempotency store for Postgres, plus an in-memory one for tests | Roadmap |
+| [`@holdsend/core`](packages/core) | Outbox state machine, keys, written-time rules, wire protocol, flush scheduler. No runtime dependencies. | Working, tested, unreleased |
+| [`@holdsend/server`](packages/server) | Idempotency store for Postgres and memory, and a framework-agnostic request handler | Working, tested, unreleased |
+| [`@holdsend/web`](packages/web) | IndexedDB store, one sender across tabs, auto-flush, Background Sync helpers | Working, tested, unreleased |
+| [`@holdsend/react-native`](packages/react-native) | AsyncStorage and MMKV store, auto-flush wired to NetInfo and AppState | Working, tested, unreleased |
+| Emergency module | Dedupe, written time, background sending where possible, SMS hand-off | Roadmap |
+
+How it is tested: [docs/testing.md](docs/testing.md).
 
 ## A first look at the core
 
@@ -39,11 +42,12 @@ import { MemoryStore, Outbox, classifyResponse } from "@holdsend/core";
 
 const outbox = new Outbox<{ text: string }>({
   store: new MemoryStore(), // platform packages will provide durable stores
-  async send(item, { headers }) {
+  async send(item, { headers, signal }) {
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(item.payload),
+      signal, // an attempt abandoned after its timeout is really cancelled
     });
     const body = await res.json().catch(() => ({}));
     return classifyResponse(res.status, body.code);
@@ -58,7 +62,8 @@ The wire contract is short and documented in [docs/protocol.md](docs/protocol.md
 
 ## Honest limits
 
-- Exactly once needs the server's help. HoldSend's client gives every item one key for life; the server must store that key and its result together. `@holdsend/server` will be a reference implementation.
+- Exactly once needs the server's help. HoldSend's client gives every item one key for life; the server must store that key and its result together. `@holdsend/server` does this for Postgres.
+- One case can still publish twice, and HoldSend tells you when it might: if the server refuses a key because it holds a *different* request (for example an earlier version of the same post), a person's "Try again" sends with a new key and `retry()` reports `newKey: true`. Ask before sending in that case.
 - A person's device clock decides the written time. The server bounds it (no more than two minutes ahead, no more than 30 days back) and only ever shows it, never sorts by it.
 - Background sending after the app closes depends on the platform. Some browsers can do it; iOS cannot do it for web apps today. HoldSend will tell the app which case it is in, so it can tell the person the truth.
 - Emergency features in this library are a delivery aid, not an emergency service.

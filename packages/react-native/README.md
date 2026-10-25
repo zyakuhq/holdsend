@@ -20,11 +20,12 @@ import { KeyValueStore, startNativeAutoFlush } from "@holdsend/react-native";
 
 const outbox = new Outbox({
   store: new KeyValueStore(AsyncStorage),
-  async send(item, { headers }) {
+  async send(item, { headers, signal }) {
     const res = await fetch("https://example.com/api/posts", {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(item.payload),
+      signal, // an attempt abandoned after its timeout is really cancelled
     });
     const body = await res.json().catch(() => ({}));
     return classifyResponse(res.status, body.code);
@@ -37,6 +38,10 @@ const flusher = startNativeAutoFlush(outbox, {
   onForeground: (cb) => AppState.addEventListener("change", (s) => s === "active" && cb()).remove,
 });
 ```
+
+## Size limit
+
+The queue is stored as one value. Android's AsyncStorage cannot read back a value much over 2 MB, and an unreadable queue would lock the person out of everything in it, so `KeyValueStore` refuses (with `OutboxTooLargeError`) any write that would make the queue larger than 1.5 MB, and nothing is lost. Keep photos and files out of payloads: save them to the file system and queue a reference. With MMKV, which has no such limit, pass `{ maxBytes: Infinity }` or a higher limit.
 
 ## Sending while the app is closed
 

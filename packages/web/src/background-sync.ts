@@ -55,14 +55,33 @@ interface SyncEventLike {
   waitUntil(promise: Promise<unknown>): void;
 }
 
+/** True when a flush report says something is still waiting to be sent. */
+function workRemains(report: unknown): boolean {
+  if (!report || typeof report !== "object") return false;
+  const r = report as { retry?: unknown; busy?: unknown; nextCheckInMs?: unknown };
+  return (typeof r.retry === "number" && r.retry > 0) || (typeof r.busy === "number" && r.busy > 0) || typeof r.nextCheckInMs === "number";
+}
+
 /**
  * For the service worker: run `flush` when the browser fires our sync tag.
- * If `flush` rejects, the browser retries the sync later.
  *
- *   self.addEventListener("sync", (event) => onBackgroundSync(event, () => outbox.flush(userId)));
+ * The browser treats the sync as done when the promise resolves, and tries
+ * again later only when it rejects. A flush that left items waiting (no
+ * answer, server busy, held by another sender) therefore rejects here, so
+ * the browser wakes the worker again instead of giving up.
+ *
+ *   // The worker has no session of its own: keep the signed-in owner in
+ *   // IndexedDB when the person signs in, and read it here.
+ *   self.addEventListener("sync", (event) =>
+ *     onBackgroundSync(event, async () => outbox.flush(await readSignedInOwner())));
  */
 export function onBackgroundSync(event: SyncEventLike, flush: () => Promise<unknown>, tag = "holdsend"): boolean {
   if (event.tag !== tag) return false;
-  event.waitUntil(flush());
+  event.waitUntil(
+    flush().then((report) => {
+      if (workRemains(report)) throw new Error("items are still waiting to be sent; asking the browser to try again");
+      return report;
+    }),
+  );
   return true;
 }

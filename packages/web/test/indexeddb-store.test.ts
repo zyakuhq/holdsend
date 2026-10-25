@@ -111,3 +111,14 @@ describe("createWebStore", () => {
     expect(await store.isDurable()).toBe(false);
   });
 });
+
+describe("audit 8: a connection the browser closed", () => {
+  it("is reopened instead of failing every write", async () => {
+    const [store] = tabs(1, "closed-underneath");
+    await store!.update((items) => void items.push({ key: "item-key-0001", kind: "k", payload: { text: "a" }, writtenAt: 1, state: "waiting", attempts: 0, touched: false }));
+    const db = await (store as unknown as { dbPromise: Promise<IDBDatabase> }).dbPromise;
+    db.close(); // what the browser does to a backgrounded page; no event reaches the store
+    await store!.update((items) => void items.push({ key: "item-key-0002", kind: "k", payload: { text: "b" }, writtenAt: 1, state: "waiting", attempts: 0, touched: false }));
+    expect((await store!.read()).map((i) => i.key).sort()).toEqual(["item-key-0001", "item-key-0002"]);
+  });
+});

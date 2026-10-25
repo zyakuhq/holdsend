@@ -39,6 +39,37 @@ export class CorruptOutboxError extends Error {
 export interface KeyValueStoreOptions {
   /** Storage key. Use one per outbox. Default "holdsend:outbox". */
   key?: string;
+  /**
+   * Largest queue, in UTF-8 bytes, this store will write. Default 1.5 MB.
+   * Android's AsyncStorage cannot read back a value much over 2 MB, and a
+   * queue it cannot read would lock the person out of everything waiting in
+   * it. A write that would pass the limit fails instead, so the app can say
+   * so. Keep photos and files out of payloads (store a reference). With
+   * MMKV, which has no such limit, raise it or pass Infinity.
+   */
+  maxBytes?: number;
+}
+
+/** Thrown instead of writing a queue too large to be read back safely. Nothing is written. */
+export class OutboxTooLargeError extends Error {
+  constructor(readonly bytes: number, readonly maxBytes: number) {
+    super(`the outbox would be ${bytes} bytes, over the ${maxBytes}-byte limit; nothing was written`);
+    this.name = "OutboxTooLargeError";
+  }
+}
+
+function utf8Bytes(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4; // a surrogate pair is one 4-byte character
+      i += 1;
+    } else bytes += 3;
+  }
+  return bytes;
 }
 
 const mmkvAdapters = new WeakMap<MmkvLike, AsyncKeyValue>();
@@ -91,10 +122,12 @@ function setChain(backend: object, key: string, chain: Promise<unknown>): void {
 export class KeyValueStore<P = unknown> implements Store<P> {
   private readonly backend: AsyncKeyValue;
   private readonly key: string;
+  private readonly maxBytes: number;
 
   constructor(backend: AsyncKeyValue, options: KeyValueStoreOptions = {}) {
     this.backend = backend;
     this.key = options.key ?? "holdsend:outbox";
+    this.maxBytes = options.maxBytes ?? 1_500_000;
   }
 
   read(): Promise<OutboxItem<P>[]> {
@@ -112,7 +145,10 @@ export class KeyValueStore<P = unknown> implements Store<P> {
         if (keys.has(item.key)) throw new Error(`duplicate key in outbox: ${item.key}`);
         keys.add(item.key);
       }
-      await this.backend.setItem(this.key, JSON.stringify(items));
+      const text = JSON.stringify(items);
+      const bytes = utf8Bytes(text);
+      if (bytes > this.maxBytes) throw new OutboxTooLargeError(bytes, this.maxBytes);
+      await this.backend.setItem(this.key, text);
       return value;
     });
     setChain(this.backend, this.key, run.catch(() => undefined));

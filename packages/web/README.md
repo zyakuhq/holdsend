@@ -6,9 +6,9 @@
 
 ## What is in it
 
-- **`IndexedDbStore`**: the outbox kept in IndexedDB, so it survives closing the tab, a crash or a reload. Every change is one readwrite transaction, which IndexedDB runs one at a time across all tabs, so two tabs can never overwrite each other.
+- **`IndexedDbStore`**: the outbox kept in IndexedDB, so it survives closing the tab, a crash or a reload. Every change is one readwrite transaction, which IndexedDB runs one at a time across all tabs, so two tabs can never overwrite each other. If the browser closes the connection (iOS Safari does after backgrounding), the store reopens it.
 - **`createWebStore()`**: IndexedDB when it works, otherwise an in-memory store that reports `isDurable() === false`, so you can tell the person their draft only lasts while the tab is open.
-- **`SenderLock`**: one tab sends at a time (Web Locks, with a localStorage lease for older Safari).
+- **`SenderLock`**: one tab sends at a time (Web Locks, with a localStorage lease for older Safari). Correctness does not depend on it; it avoids sending the same request from two tabs.
 - **`startAutoFlush()`**: sends when the connection comes back or the tab becomes visible, and backs off while items keep failing.
 - **`requestBackgroundSync()` / `onBackgroundSync()`**: sending after the tab closes, where the browser supports it.
 
@@ -23,11 +23,12 @@ if (!(await store.isDurable())) showWarning("Drafts are kept only while this tab
 
 const outbox = new Outbox({
   store,
-  async send(item, { headers }) {
+  async send(item, { headers, signal }) {
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(item.payload),
+      signal, // an attempt abandoned after its timeout is really cancelled
     });
     const body = await res.json().catch(() => ({}));
     return classifyResponse(res.status, body.code);
@@ -45,6 +46,8 @@ async function publish(text: string) {
 ## Background sending, honestly
 
 Only Chromium browsers implement Background Sync. Safari (including every browser on iOS) and Firefox do not. `requestBackgroundSync()` returns `"background"` only after a registration actually succeeded, and `"open_app"` otherwise. Show the person which one they got when they press Send. For urgent messages on `"open_app"` devices, offer another route, such as SMS.
+
+In the service worker, `onBackgroundSync(event, flush)` rejects when the flush left items waiting, so the browser wakes the worker again later instead of treating the sync as done. The worker has no session of its own: when the person signs in, keep their owner id (and whatever your `send` needs to authenticate) in IndexedDB for the worker to read.
 
 ## Licence
 
