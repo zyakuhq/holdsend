@@ -51,6 +51,8 @@ export {
 
 export { MemoryStore, type Store } from "./store.js";
 
+export { createFlushScheduler, type FlushScheduler, type SchedulerOptions } from "./scheduler.js";
+
 export {
   Outbox,
   type AddOptions,
