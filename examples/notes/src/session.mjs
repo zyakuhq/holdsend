@@ -47,3 +47,18 @@ export async function writeSignedInOwner(owner) {
     /* the worker then sends nothing, which is the safe side */
   }
 }
+
+/** The demo's stand-in for signing in: a random id kept in this browser. */
+export function demoUser() {
+  const make = () => `demo-${crypto.randomUUID()}`;
+  try {
+    let id = localStorage.getItem("holdsend-notes-user");
+    if (!id) {
+      id = make();
+      localStorage.setItem("holdsend-notes-user", id);
+    }
+    return id;
+  } catch {
+    return make();
+  }
+}

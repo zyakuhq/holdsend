@@ -30,7 +30,7 @@ Open http://localhost:3000. It uses PGlite (Postgres in WebAssembly, in memory) 
 | [`src/send.mjs`](src/send.mjs) | How one note is sent. The outbox adds `Idempotency-Key` and `Written-At`. |
 | [`src/sw.mjs`](src/sw.mjs) | The service worker. Keeps the page available offline and sends in the background where the browser supports Background Sync. |
 | [`src/session.mjs`](src/session.mjs) | Tells the service worker who is signed in, so it only ever sends that person's notes. |
-| [`test/e2e.test.mjs`](test/e2e.test.mjs) | The checks above, run in Chromium on every pull request. They count the server's notes, not what the page shows. |
+| [`test/scenarios.mjs`](test/scenarios.mjs) | The checks above, run in Chromium on every pull request against this page and the [React version](../react). They count the server's notes, not what the page shows. |
 
 ## Demo shortcuts
 

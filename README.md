@@ -45,7 +45,7 @@ npm install && npm run build
 npm start --workspace holdsend-example-notes   # then open http://localhost:3000
 ```
 
-See [examples/notes](examples/notes) for what to try and where each part lives. The same scenarios run in a real browser on every pull request.
+See [examples/notes](examples/notes) for what to try and where each part lives, and [examples/react](examples/react) for the same app in React with copyable hooks (`npm start --workspace holdsend-example-react`). The same scenarios run in a real browser on every pull request.
 
 ## A first look at the core
 

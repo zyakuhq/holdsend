@@ -1,0 +1,19 @@
+{
+  "name": "holdsend-example-react",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The notes example as a React app, with hooks for a HoldSend outbox.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "e2e": "node --test test/e2e.test.mjs"
+  },
+  "dependencies": {
+    "@holdsend/core": "*",
+    "@holdsend/web": "*",
+    "holdsend-example-notes": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}

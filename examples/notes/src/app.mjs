@@ -36,13 +36,29 @@ async function openDatabase(databaseUrl) {
   return { db: lite, transaction: (fn) => lite.transaction(fn), close: () => lite.close(), label: "PGlite in memory; set DATABASE_URL to use Postgres" };
 }
 
-/** Bundles the page script (a module) and the service worker (a classic script) once, at start, into memory. */
-async function bundleClient() {
+/**
+ * Bundles the page script (a module) and the service worker (a classic script)
+ * once, at start, into memory. Other examples pass their own page entry and
+ * reuse this server and service worker.
+ */
+async function bundleClient(pageEntry, development) {
   const bundle = async (entry, format) => {
-    const result = await build({ entryPoints: [here(entry)], bundle: true, format, target: "es2022", write: false, logLevel: "silent" });
+    const result = await build({
+      entryPoints: [entry],
+      bundle: true,
+      format,
+      target: "es2022",
+      jsx: "automatic",
+      // Development builds keep React's extra checks, such as StrictMode
+      // running every effect twice.
+      define: { "process.env.NODE_ENV": development ? '"development"' : '"production"' },
+      minify: format === "esm" && !development,
+      write: false,
+      logLevel: "silent",
+    });
     return result.outputFiles[0].text;
   };
-  const [app, sw] = await Promise.all([bundle("./client.mjs", "esm"), bundle("./sw.mjs", "iife")]);
+  const [app, sw] = await Promise.all([bundle(pageEntry, "esm"), bundle(here("./sw.mjs"), "iife")]);
   return { "app.js": app, "sw.js": sw };
 }
 
@@ -59,7 +75,9 @@ export async function createNotesApp(options = {}) {
   }
   const store = new PostgresIdempotencyStore({ db: database.db, transaction: database.transaction });
 
-  const [client, indexHtml] = await Promise.all([bundleClient(), readFile(here("../public/index.html"), "utf8")]);
+  // options.page lets another example serve its own page with this server.
+  const pageFiles = options.page ?? { entry: here("./client.mjs"), html: here("../public/index.html") };
+  const [client, indexHtml] = await Promise.all([bundleClient(pageFiles.entry, options.development === true), readFile(pageFiles.html, "utf8")]);
   // Owners who asked to lose the answer to their next note (the demo button).
   const loseNextAnswer = new Set();
   // For tests: how many answers were really dropped.
