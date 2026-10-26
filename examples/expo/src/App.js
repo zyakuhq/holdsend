@@ -126,8 +126,10 @@ function Notes() {
       (await outbox.cancel(item.key)) === "in_flight"
         ? "Too late to cancel: this note has started sending and may already be published. It will be finished, not sent twice."
         : undefined,
-    approve: async (item) =>
-      (await outbox.approve(item.key))?.newKey ? "Sending with a new key. If an earlier version reached the server, there may be two copies." : undefined,
+    approve: async (item) => {
+      const result = await outbox.approve(item.key);
+      return result.ok && result.newKey ? "Sending with a new key. If an earlier version reached the server, there may be two copies." : undefined;
+    },
     retry: async (item) => {
       if (item.stuckReason === "key_conflict") {
         const yes = await confirm("The server holds a different note under this note's key. Send this one as a new note? You may end up with two.");

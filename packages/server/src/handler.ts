@@ -4,8 +4,8 @@
  *   const answer = await handleIdempotent({
  *     store, owner: session.userId, operation: "post.create",
  *     headers: req.headers, content: req.body,
- *     create: async (tx) => {
- *       const post = await insertPost(tx, req.body, { writtenAt: answer.writtenAt });
+ *     create: async (tx, { writtenAt }) => {
+ *       const post = await insertPost(tx, req.body, { writtenAt });
  *       return { status: 201, body: post, resourceRef: post.id };
  *     },
  *   });
@@ -94,7 +94,13 @@ export interface HandleOptions<Tx> {
    * the person wrote it; leave out anything that is not content.
    */
   content: unknown;
-  /** Writes the resource inside the transaction. Its result is stored and replayed. */
+  /**
+   * Writes the resource inside the transaction. A 2xx result is stored with
+   * the key and replayed to every retry. Any other status is answered but
+   * not stored: the transaction is rolled back and the key freed, so a retry
+   * runs `create` again (a temporary failure must not be replayed forever).
+   * Throwing does the same.
+   */
   create: (tx: Tx, context: { writtenAt: number | null; key: string | null }) => Promise<CreateResult>;
   /** Reject requests without a key (400 key_required). Default false: they run unkeyed. */
   requireKey?: boolean;
@@ -111,7 +117,17 @@ export interface IdempotentAnswer {
   body: unknown;
   headers: Record<string, string>;
   /** What happened, for logs and tests. */
-  outcome: "created" | "replayed" | "unkeyed" | "conflict" | "in_progress" | "gone" | "invalid_key" | "key_required";
+  outcome:
+    | "created"
+    | "replayed"
+    | "not_stored"
+    | "unkeyed"
+    | "conflict"
+    | "in_progress"
+    | "gone"
+    | "invalid_key"
+    | "key_required"
+    | "invalid_content";
 }
 
 function errorAnswer(status: number, code: string, message: string, outcome: IdempotentAnswer["outcome"], headers: Record<string, string> = {}): IdempotentAnswer {
@@ -119,6 +135,19 @@ function errorAnswer(status: number, code: string, message: string, outcome: Ide
 }
 
 const timers = globalThis as unknown as { setTimeout(fn: () => void, ms: number): unknown };
+
+const isSuccess = (status: number) => status >= 200 && status < 300;
+
+/** Thrown inside the transaction to roll back a non-2xx result instead of storing it. */
+class NotStored {
+  constructor(readonly result: CreateResult) {}
+}
+
+function nonNegative(value: number | undefined, fallback: number, name: string): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value) || value < 0) throw new RangeError(`${name} must be a finite number of ms, 0 or more`);
+  return value;
+}
 const sleep = (ms: number) => new Promise<void>((resolve) => timers.setTimeout(resolve, ms));
 
 export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<IdempotentAnswer> {
@@ -132,14 +161,21 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
   if (keyRead.key === null) {
     if (options.requireKey) return errorAnswer(400, "key_required", "This endpoint requires an Idempotency-Key header.", "key_required");
     const result = await options.store.transaction((tx) => options.create(tx, { writtenAt: null, key: null }));
-    return { status: result.status, body: result.body, headers: {}, outcome: "unkeyed" };
+    return { status: result.status, body: result.body, headers: { ...result.headers }, outcome: "unkeyed" };
   }
 
   const key = keyRead.key;
   const record = { owner: options.owner, operation: options.operation, key };
-  const requestHash = await hashRequest(options.operation, options.content);
-  const waitMs = options.waitMs ?? 2000;
-  let pollMs = Math.max(10, options.pollMs ?? 50);
+  let requestHash: string;
+  try {
+    // An absent body counts as null, the same as an empty JSON body.
+    requestHash = await hashRequest(options.operation, options.content === undefined ? null : options.content);
+  } catch {
+    // Not plain JSON, or nested too deeply to fingerprint.
+    return errorAnswer(400, "invalid_content", "The request content must be plain JSON.", "invalid_content");
+  }
+  const waitMs = nonNegative(options.waitMs, 2000, "waitMs");
+  let pollMs = Math.max(10, nonNegative(options.pollMs, 50, "pollMs"));
   const deadline = now() + waitMs;
 
   for (;;) {
@@ -149,7 +185,7 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
         return {
           status: claimed.result.status,
           body: claimed.result.body,
-          headers: { [REPLAYED_HEADER]: "true" },
+          headers: { ...claimed.result.headers, [REPLAYED_HEADER]: "true" },
           outcome: "replayed",
         };
       case "conflict":
@@ -168,7 +204,9 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
         try {
           result = await options.store.transaction(async (tx) => {
             const created = await options.create(tx, { writtenAt, key });
+            if (!isSuccess(created.status)) throw new NotStored(created);
             const stored: StoredResult = { status: created.status, body: created.body };
+            if (created.headers !== undefined) stored.headers = created.headers;
             await options.store.completeInTransaction(tx, {
               ...record,
               token: claimed.token,
@@ -180,6 +218,10 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
         } catch (err) {
           // Nothing committed. Free the key so the client's retry can run.
           await options.store.release(record, claimed.token).catch(() => undefined);
+          if (err instanceof NotStored) {
+            const { result } = err;
+            return { status: result.status, body: result.body, headers: { ...result.headers }, outcome: "not_stored" };
+          }
           // Another request took the claim over while this one was slow. Its
           // write is the one that counts: look again and answer with it.
           if (err instanceof ClaimLostError && now() < deadline) continue;
@@ -188,7 +230,7 @@ export async function handleIdempotent<Tx>(options: HandleOptions<Tx>): Promise<
           }
           throw err;
         }
-        return { status: result.status, body: result.body, headers: {}, outcome: "created" };
+        return { status: result.status, body: result.body, headers: { ...result.headers }, outcome: "created" };
       }
     }
   }

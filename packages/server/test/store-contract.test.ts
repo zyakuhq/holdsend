@@ -158,7 +158,7 @@ for (const [name, make] of factories) {
       const c = await h.store.claim({ ...rec, requestHash: "h1", now: T0 });
       if (c.type !== "claimed") throw new Error("expected claim");
       await createAndComplete(c.token, { id: "n1", text: "private words" }, "n1");
-      const tombstoned = await h.store.transaction((tx) => h.store.tombstoneResource(tx, rec.owner, rec.operation, "n1"));
+      const tombstoned = await h.store.transaction((tx) => h.store.tombstoneResource(tx, { owner: rec.owner, operation: rec.operation, resourceRef: "n1" }));
       expect(tombstoned).toBe(1);
       expect((await h.store.claim({ ...rec, requestHash: "h1", now: T0 })).type).toBe("gone");
       expect((await h.store.claim({ ...rec, requestHash: "anything", now: T0 })).type).toBe("gone");

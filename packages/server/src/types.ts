@@ -30,14 +30,29 @@ export interface RecordId {
 }
 
 /**
- * What the server answered the first time. Replayed verbatim for a repeated
- * key, and kept as long as the record (forever by default). Keep it small:
- * usually the new resource's id is all a client needs. Do not put the
- * person's content or other personal data in it unless the client needs it.
+ * What the server answered the first time. Replayed for a repeated key, and
+ * kept as long as the record (forever by default). Only successful (2xx)
+ * answers are stored; see handleIdempotent. Keep it small: usually the new
+ * resource's id is all a client needs. Do not put the person's content or
+ * other personal data in it unless the client needs it.
+ *
+ * `body` must be plain JSON; an absent body is replayed as null. Postgres
+ * cannot store the NUL character (\u0000) in JSON, so leave it out of
+ * stored bodies and headers.
  */
 export interface StoredResult {
   status: number;
   body: unknown;
+  /** Response headers to send again on a replay, for example Location. */
+  headers?: Record<string, string>;
+}
+
+/** The resource a tombstone is for: see IdempotencyStore.tombstoneResource. */
+export interface ResourceId {
+  owner: string;
+  operation: string;
+  /** The id that `create` returned as resourceRef. */
+  resourceRef: string;
 }
 
 export type ClaimOutcome =
@@ -107,7 +122,7 @@ export interface IdempotencyStore<Tx = unknown> {
    * of creating the resource again. The stored request hash and result are
    * cleared, so a tombstone keeps nothing derived from what the person wrote.
    */
-  tombstoneResource(tx: Tx, owner: string, operation: string, resourceRef: string): Promise<number>;
+  tombstoneResource(tx: Tx, resource: ResourceId): Promise<number>;
   /**
    * Deletes records whose expiry has passed and claims nobody finished.
    * Run it on a schedule (for example hourly). Unfinished claims are also

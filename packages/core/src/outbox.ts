@@ -25,12 +25,16 @@ import {
   type DiscardResult,
   type RetryResult,
 } from "./transitions.js";
-import { DEFAULT_POLICY, type AttemptOutcome, type ItemStatus, type OutboxItem, type Policy } from "./types.js";
+import { resolvePolicy, type AttemptOutcome, type ItemStatus, type OutboxItem, type Policy, type PolicyOptions } from "./types.js";
 
 export interface SendContext {
   /** Idempotency-Key (and Written-At unless omitted). Send them on the request. */
   headers: Record<string, string>;
-  /** 1 for the first automatic attempt since the item was added or reset. */
+  /**
+   * This attempt's number, from 1, counting only attempts that got an answer
+   * from the server: attempts with no answer and "busy" answers are given
+   * back, so the number can repeat. For logs, not for logic.
+   */
   attempt: number;
   /**
    * Fires when the attempt is abandoned (policy.attemptTimeoutMs). Pass it to
@@ -49,7 +53,7 @@ export type Sender<P> = (item: OutboxItem<P>, context: SendContext) => Promise<A
 export interface OutboxOptions<P> {
   store: Store<P>;
   send: Sender<P>;
-  policy?: Partial<Policy>;
+  policy?: PolicyOptions;
   /** Defaults to Date.now. */
   now?: () => number;
   /** Defaults to a random UUID. */
@@ -110,7 +114,7 @@ function emptyReport(): FlushReport {
 }
 
 export class Outbox<P = unknown> {
-  readonly policy: Policy;
+  readonly policy: Readonly<Policy>;
   private readonly store: Store<P>;
   private readonly send: Sender<P>;
   private readonly now: () => number;
@@ -125,15 +129,11 @@ export class Outbox<P = unknown> {
   constructor(options: OutboxOptions<P>) {
     this.store = options.store;
     this.send = options.send;
-    this.policy = { ...DEFAULT_POLICY, ...options.policy };
+    this.policy = resolvePolicy(options.policy);
     this.now = options.now ?? Date.now;
     this.makeKey = options.newKey ?? defaultNewKey;
     this.isOnline = options.isOnline ?? (() => true);
     this.headerOptions = options.headerOptions;
-    if (this.policy.claimRenewMs > 0 && this.policy.claimRenewMs >= this.policy.staleClaimMs) {
-      throw new RangeError("policy.claimRenewMs must be smaller than policy.staleClaimMs");
-    }
-    if (!(this.policy.attemptTimeoutMs > 0)) throw new RangeError("policy.attemptTimeoutMs must be positive");
   }
 
   /** Keeps something the person wrote. Resolves once it is stored. */
@@ -178,12 +178,12 @@ export class Outbox<P = unknown> {
   }
 
   /** Approves one item that waited longer than the confirmation age. See RetryResult for `newKey`. */
-  approve(key: string): Promise<RetryResult | null> {
-    return this.change((items) => approveItem(items, key, this.now(), this.policy, this.makeKey));
+  approve(key: string): Promise<RetryResult> {
+    return this.change((items) => approveItem(items, key, this.now(), this.makeKey, this.policy));
   }
 
   /** Resets one stuck item for sending. See RetryResult for when its key changes and what that means. */
-  retry(key: string): Promise<RetryResult | null> {
+  retry(key: string): Promise<RetryResult> {
     return this.change((items) => retryItem(items, key, this.now(), this.makeKey, this.policy));
   }
 

@@ -46,7 +46,7 @@ describe("N1: a server that never answers", () => {
 
     // A person's Try again starts over, with the same key.
     const again = await outbox.retry(entry!.item.key);
-    expect(again).toEqual({ key: entry!.item.key, newKey: false });
+    expect(again).toEqual({ ok: true, key: entry!.item.key, newKey: false });
     const [after] = await outbox.list();
     expect(after?.item.state).toBe("waiting");
     expect(after?.item.stuckReason).toBeUndefined();
@@ -250,8 +250,8 @@ describe("N9: a person's Try again after a key conflict", () => {
     await outbox.flush();
     expect((await outbox.list())[0]?.item.stuckReason).toBe("key_conflict");
     const result = await outbox.retry(item.key);
-    expect(result?.newKey).toBe(true);
-    expect(result?.key).not.toBe(item.key);
+    expect(result).toMatchObject({ ok: true, newKey: true });
+    expect(result.ok && result.key).not.toBe(item.key);
   });
 });
 

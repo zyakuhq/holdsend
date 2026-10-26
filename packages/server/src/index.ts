@@ -5,6 +5,7 @@ export {
   type CompleteInput,
   type IdempotencyStore,
   type RecordId,
+  type ResourceId,
   type StoreOptions,
   type StoredResult,
 } from "./types.js";
