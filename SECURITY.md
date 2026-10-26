@@ -20,4 +20,4 @@ Anything that could make HoldSend:
 
 ## Supported versions
 
-HoldSend has not had a release yet. Until 1.0, only the latest release receives fixes.
+The first release is 0.1.0. Until 1.0, only the latest release receives fixes.

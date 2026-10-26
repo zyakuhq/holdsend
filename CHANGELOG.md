@@ -2,7 +2,7 @@
 
 All notable changes to the `@holdsend` packages. All four packages share one version number.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-26)
 
 The first release. Early: the API may still change before 1.0, and nothing here is ready for production yet.
 
