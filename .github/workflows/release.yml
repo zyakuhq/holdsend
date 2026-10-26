@@ -1,20 +1,22 @@
 name: Release
 
 # Publishes the four @holdsend packages to npm when a version tag (v0.1.0,
-# ...) is pushed. The tag must match every package's version. Each package
-# is published with provenance, so anyone can check it was built here.
+# ...) is pushed, with provenance so anyone can check where they were built.
 #
-# Run it by hand with "dry run" to see exactly what would be published.
+# Safety:
+# - Publishing needs the approval of a reviewer of the "npm-release"
+#   environment (the project lead). Without it the publish job waits.
+# - Only a tag publishes, and only when it matches every package's version.
+#   A manual run always dry-runs, from any branch.
+# - Building and checking happen in a job that holds no secrets. The publish
+#   job installs without running any package's install scripts, and its
+#   checkout keeps no GitHub token.
+# - A re-run after a half-finished release skips what is already on npm.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Only show what would be published"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -24,44 +26,88 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish to npm
+  verify:
+    name: Build and check (no secrets)
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # create the GitHub release
-      id-token: write # npm provenance
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
       - run: npm run check
-
-      - name: Tag matches the package versions
-        if: github.ref_type == 'tag'
+      - id: version
+        name: Version, and that the tag matches it
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           version="$(node -p 'require("./packages/core/package.json").version')"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package version $version."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$REF_TYPE" = "tag" ] && [ "v$version" != "$REF_NAME" ]; then
+            echo "Tag $REF_NAME does not match package version $version."
             exit 1
           fi
 
-      - name: Publish (core first, then the packages that depend on it)
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install the packages and the root build tools, without install scripts
+        run: npm ci --ignore-scripts --include-workspace-root --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
+      - name: Build
+        run: npm run build --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
+      - name: Publish (core first; skips versions already on npm)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          DRY_RUN: ${{ github.ref_type != 'tag' }}
         run: |
           flags="--access public --provenance"
           if [ "$DRY_RUN" = "true" ]; then flags="$flags --dry-run"; fi
+          # A version with a dash (0.2.0-rc.1) is a pre-release: never "latest".
+          case "$VERSION" in *-*) flags="$flags --tag next" ;; esac
           for pkg in core server web react-native; do
+            if npm view "@holdsend/$pkg@$VERSION" version >/dev/null 2>&1; then
+              echo "@holdsend/$pkg@$VERSION is already on npm; skipping."
+              continue
+            fi
             npm publish --workspace "packages/$pkg" $flags
           done
 
-      - name: GitHub release
-        if: github.ref_type == 'tag'
+  github-release:
+    name: GitHub release
+    needs: publish
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release unless it exists
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md for what is in this release." --verify-tag
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            gh release create "$TAG" --repo "$REPO" --title "$TAG" --notes "See CHANGELOG.md for what is in this release." --verify-tag
+          fi
