@@ -65,7 +65,7 @@ describe("handleIdempotent", () => {
   it("answers 410 gone after the resource was deleted", async () => {
     const { handle, store } = memorySetup();
     await handle({ "Idempotency-Key": "item-key-0001" }, { text: "hello" });
-    await store.transaction((tx) => store.tombstoneResource(tx, "person-a", "post.create", "post-1"));
+    await store.transaction((tx) => store.tombstoneResource(tx, { owner: "person-a", operation: "post.create", resourceRef: "post-1" }));
     expect(await handle({ "Idempotency-Key": "item-key-0001" }, { text: "hello" })).toMatchObject({ status: 410, body: { code: "gone" } });
   });
 

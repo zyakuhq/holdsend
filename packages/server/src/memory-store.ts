@@ -15,6 +15,7 @@ import {
   type IdempotencyStore,
   type RecordId,
   type StoreOptions,
+  type ResourceId,
   type StoredResult,
 } from "./types.js";
 
@@ -32,10 +33,17 @@ interface MemoryRecord {
 
 type PendingChange = () => void;
 
+/** A transaction of the memory store. Opaque: pass it back to the store, nothing else. */
 export interface MemoryTx {
+  readonly __memoryTx: true;
+}
+
+interface MemoryTxState extends MemoryTx {
   readonly changes: PendingChange[];
   readonly checks: (() => void)[];
 }
+
+const state = (tx: MemoryTx) => tx as MemoryTxState;
 
 function id(r: RecordId): string {
   return JSON.stringify([r.owner, r.operation, r.key]);
@@ -88,7 +96,7 @@ export class MemoryIdempotencyStore implements IdempotencyStore<MemoryTx> {
   }
 
   async transaction<T>(fn: (tx: MemoryTx) => Promise<T>): Promise<T> {
-    const tx: MemoryTx = { changes: [], checks: [] };
+    const tx: MemoryTxState = { __memoryTx: true, changes: [], checks: [] };
     const value = await fn(tx);
     // Commit: every check passes or nothing is applied.
     for (const check of tx.checks) check();
@@ -104,8 +112,8 @@ export class MemoryIdempotencyStore implements IdempotencyStore<MemoryTx> {
     };
     check();
     const result = clone(input.result);
-    tx.checks.push(check);
-    tx.changes.push(() => {
+    state(tx).checks.push(check);
+    state(tx).changes.push(() => {
       const record = this.records.get(key);
       if (!record) return;
       record.state = "completed";
@@ -122,13 +130,13 @@ export class MemoryIdempotencyStore implements IdempotencyStore<MemoryTx> {
     if (record && record.state === "in_progress" && record.claimToken === token) this.records.delete(key);
   }
 
-  async tombstoneResource(tx: MemoryTx, owner: string, operation: string, resourceRef: string): Promise<number> {
+  async tombstoneResource(tx: MemoryTx, { owner, operation, resourceRef }: ResourceId): Promise<number> {
     let count = 0;
     for (const [key, record] of this.records) {
       const [o, op] = JSON.parse(key) as [string, string, string];
       if (o === owner && op === operation && record.resourceRef === resourceRef && record.state === "completed") count += 1;
     }
-    tx.changes.push(() => {
+    state(tx).changes.push(() => {
       for (const [key, record] of this.records) {
         const [o, op] = JSON.parse(key) as [string, string, string];
         if (o === owner && op === operation && record.resourceRef === resourceRef && record.state === "completed") {

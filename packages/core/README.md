@@ -1,8 +1,10 @@
 # @holdsend/core
 
-The platform-independent part of [HoldSend](https://github.com/zyakuhq/holdsend): an outbox that keeps what a person writes while offline and sends it exactly once when the connection returns.
+The platform-independent part of [HoldSend](https://github.com/zyakuhq/holdsend): an outbox that keeps what a person writes while offline and sends it when the connection returns, with one idempotency key per item for life.
 
-No runtime dependencies. ESM. About 4.5 KB minified and gzipped, with a CI budget of 5 KB.
+Exactly once needs the server's half too: the server must store each key with its result and answer a retry with the original. [`@holdsend/server`](https://www.npmjs.com/package/@holdsend/server) does that for Postgres; the wire contract is in [the protocol](https://zyakuhq.github.io/holdsend/docs/protocol.html).
+
+No runtime dependencies. ESM. Under 5 KB minified and gzipped (a CI budget).
 
 > Early and unreleased. The API may change before 0.1.0.
 

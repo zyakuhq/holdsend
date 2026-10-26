@@ -119,7 +119,7 @@ export interface Policy {
    * Applies however often flush() is called. Default 1s, 5s, 15s, 30s, 1m,
    * 2m, 5m.
    */
-  retryDelaysMs: number[];
+  retryDelaysMs: readonly number[];
   /**
    * Attempts with no answer do not use up `maxAttempts` (they say nothing
    * about the request). But if nothing has answered for this long, the item
@@ -128,13 +128,47 @@ export interface Policy {
   giveUpAfterMs: number;
 }
 
+/** Policy fields to change; any left out or undefined keep their default. */
+export type PolicyOptions = { [K in keyof Policy]?: Policy[K] | undefined };
+
+/**
+ * Fills in defaults for the fields `partial` leaves out (or sets to
+ * undefined) and checks every value, so a typo or an unset environment
+ * variable fails at start instead of quietly making claims look stale or
+ * retrying forever. The result is frozen.
+ */
+export function resolvePolicy(partial: PolicyOptions = {}): Readonly<Policy> {
+  const merged: Record<string, unknown> = { ...DEFAULT_POLICY };
+  for (const [name, value] of Object.entries(partial)) if (value !== undefined) merged[name] = value;
+  const policy = merged as unknown as Policy;
+  const positive = (name: keyof Policy, allowZero = false) => {
+    const value = policy[name] as number;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
+      throw new RangeError(`policy.${name} must be a finite number${allowZero ? ", 0 or more" : " above 0"}`);
+    }
+  };
+  positive("staleClaimMs");
+  positive("claimRenewMs", true);
+  positive("confirmAfterMs");
+  positive("attemptTimeoutMs");
+  positive("giveUpAfterMs");
+  if (!Number.isInteger(policy.maxAttempts) || policy.maxAttempts < 1) throw new RangeError("policy.maxAttempts must be a whole number, 1 or more");
+  if (!Array.isArray(policy.retryDelaysMs) || policy.retryDelaysMs.length === 0 || policy.retryDelaysMs.some((d) => !Number.isFinite(d) || d < 0)) {
+    throw new RangeError("policy.retryDelaysMs must be a non-empty list of finite numbers, 0 or more");
+  }
+  if (policy.claimRenewMs > 0 && policy.claimRenewMs >= policy.staleClaimMs) {
+    throw new RangeError("policy.claimRenewMs must be smaller than policy.staleClaimMs");
+  }
+  return Object.freeze({ ...policy, retryDelaysMs: Object.freeze([...policy.retryDelaysMs]) });
+}
+
 export const DEFAULT_POLICY: Readonly<Policy> = Object.freeze({
   maxAttempts: 5,
   staleClaimMs: 2 * 60 * 1000,
   claimRenewMs: 30 * 1000,
   confirmAfterMs: 30 * 24 * 60 * 60 * 1000,
   attemptTimeoutMs: 2 * 60 * 1000,
-  retryDelaysMs: [1_000, 5_000, 15_000, 30_000, 60_000, 120_000, 300_000],
+  retryDelaysMs: Object.freeze([1_000, 5_000, 15_000, 30_000, 60_000, 120_000, 300_000]),
   giveUpAfterMs: 24 * 60 * 60 * 1000,
 });
 

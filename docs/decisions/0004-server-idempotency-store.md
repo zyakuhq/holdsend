@@ -17,6 +17,8 @@ Exactly-once publishing needs the server: a client can only promise one key per 
 - Stores share one interface and one contract test suite. Postgres is tested against a real Postgres engine (PGlite), not a mock.
 - No runtime dependency on a database driver: anything with `query(text, params)` works.
 
+- Only 2xx results are stored and replayed (added 2026-10-26 after the third audit). A failed `create` is answered, rolled back and its key freed, so a temporary failure is not replayed forever. Stored results may carry response headers, kept in their own column. `tombstoneResource` takes `{ owner, operation, resourceRef }`.
+
 ## Why
 
 - Holding a transaction open across a slow write (uploads, moderation) lets a burst of slow requests exhaust a connection pool. A claim row serialises duplicates just as well.

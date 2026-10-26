@@ -28,6 +28,7 @@ The body is whatever the app sends. HoldSend adds nothing to it.
    - created and deleted since: `410` with code `gone`.
 5. If `Written-At` is present and a key is present, keep it only within bounds (see below), in a separate field from the arrival time. Any client can send it: it is the author's claim, never a fact the server checked.
 6. A different request under a key whose claim is unfinished is a conflict too, even if that claim is old: the original request may still be retried.
+7. Only a successful (2xx) answer is stored and replayed. Any other answer is rolled back and the key freed, so the client's retry runs again; replaying a temporary failure forever would mean the item is never delivered.
 
 Records for content that can wait long in a queue should live as long as the content, not a fixed number of days: a retry can arrive weeks later.
 

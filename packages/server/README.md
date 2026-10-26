@@ -36,19 +36,22 @@ app.post("/api/posts", async (req, res) => {
     operation: "post.create",
     headers: req.headers,
     content: req.body,           // what makes two requests "the same"
+    requireKey: true,            // a request without a key could not be told apart from its retry
     create: async (tx, { writtenAt }) => {
       const { rows } = await tx.query(
         "INSERT INTO posts (body, written_at) VALUES ($1, $2) RETURNING id",
         [req.body.text, writtenAt === null ? null : new Date(writtenAt)],
       );
-      return { status: 201, body: rows[0], resourceRef: String(rows[0].id) };
+      // Only a 2xx answer is stored and replayed. Anything else rolls back
+      // and frees the key, so a retry runs create again.
+      return { status: 201, body: { id: rows[0].id }, headers: { Location: `/api/posts/${rows[0].id}` }, resourceRef: String(rows[0].id) };
     },
   });
   res.status(answer.status).set(answer.headers).json(answer.body);
 });
 ```
 
-When a post is deleted, call `store.tombstoneResource(tx, owner, "post.create", postId)` inside the delete's transaction.
+When a post is deleted, call `store.tombstoneResource(tx, { owner, operation: "post.create", resourceRef: postId })` inside the delete's transaction.
 
 ## Keeping it tidy and private
 

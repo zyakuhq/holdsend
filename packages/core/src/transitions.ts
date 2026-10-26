@@ -22,9 +22,33 @@ function find<P>(items: OutboxItem<P>[], key: string): OutboxItem<P> | undefined
   return items.find((i) => i.key === key);
 }
 
-/** A sender holds this item and has renewed its claim recently. */
+/**
+ * A sender holds this item and has renewed its claim recently. A claim
+ * stamped further in the future than a claim can last was made while the
+ * device clock was ahead (it has since been set back); it is treated as
+ * stale rather than frozen until real time catches up.
+ */
 export function isClaimLive(item: OutboxItem, now: number, policy: Policy = DEFAULT_POLICY): boolean {
-  return item.state === "sending" && now - (item.claimedAt ?? 0) <= policy.staleClaimMs;
+  if (item.state !== "sending") return false;
+  const age = now - (item.claimedAt ?? 0);
+  return age <= policy.staleClaimMs && age >= -policy.staleClaimMs;
+}
+
+/** The latest moment an item's backoff may hold it: never longer than the longest delay, even after the clock was set back. */
+function retryDue(item: OutboxItem, now: number, policy: Policy): boolean {
+  if (item.retryAt === undefined) return true;
+  const longest = Math.max(...policy.retryDelaysMs);
+  return now >= item.retryAt || item.retryAt - now > longest;
+}
+
+/**
+ * Whether an item belongs in a flush for `owner`. A flush for one owner sends
+ * only that owner's items; a flush for no owner sends everything. Items added
+ * without an owner are sent only by a flush for no owner, so on a shared
+ * device they never go out under whoever happens to be signed in.
+ */
+function forOwner(item: OutboxItem, owner: string | undefined): boolean {
+  return owner === undefined || item.owner === owner;
 }
 
 /**
@@ -41,11 +65,11 @@ export function needsConfirmation(item: OutboxItem, now: number, policy: Policy 
 
 /** May an automatic sender take this item now (for this owner)? */
 export function isSendable(item: OutboxItem, now: number, policy: Policy = DEFAULT_POLICY, owner?: string): boolean {
-  if (owner !== undefined && item.owner !== undefined && item.owner !== owner) return false;
+  if (!forOwner(item, owner)) return false;
   if (needsConfirmation(item, now, policy)) return false;
   if (item.attempts >= policy.maxAttempts) return false;
   // Backing off after a failed attempt, however often flush() is called.
-  if (item.retryAt !== undefined && now < item.retryAt) return false;
+  if (!retryDue(item, now, policy)) return false;
   if (item.state === "waiting") return true;
   // A claim nobody renewed: its sender is gone. Take it over, same key.
   if (item.state === "sending") return !isClaimLive(item, now, policy);
@@ -203,14 +227,16 @@ export function cancel(items: OutboxItem[], key: string): CancelResult {
  * with that key could only be refused again, so it gets a new one, and the
  * result says so (`newKey: true`, see RetryResult for what that means).
  */
-export function approve(items: OutboxItem[], key: string, now: number, policy: Policy = DEFAULT_POLICY, newKey?: () => string): RetryResult | null {
+export function approve(items: OutboxItem[], key: string, now: number, newKey: () => string, policy: Policy = DEFAULT_POLICY): RetryResult {
   const item = find(items, key);
-  if (!item || !needsConfirmation(item, now, policy)) return null;
+  if (!item || item.state === "sent") return { ok: false, reason: "not_found" };
+  if (!needsConfirmation(item, now, policy)) return { ok: false, reason: "not_waiting_for_approval" };
   item.approvedAt = now;
-  const replaced = item.state === "stuck" && item.stuckReason === "key_conflict" && newKey !== undefined;
+  const replaced = item.state === "stuck" && item.stuckReason === "key_conflict";
   if (replaced) item.key = newKey();
   freshStart(item);
-  return { key: item.key, newKey: replaced };
+  delete item.lastError;
+  return { ok: true, key: item.key, newKey: replaced };
 }
 
 /** Clears everything an earlier run of attempts left behind, after a person decided to send again. */
@@ -226,7 +252,17 @@ function freshStart(item: OutboxItem): void {
   delete item.timeouts;
 }
 
-export interface RetryResult {
+/**
+ * What a person's Send (approve) or Try again (retry) did. `ok: false` says
+ * why nothing changed: the item is gone (`not_found`), or it is not in the
+ * state that button is for.
+ */
+export type RetryResult =
+  | RetryStarted
+  | { ok: false; reason: "not_found" | "not_stuck" | "not_waiting_for_approval" };
+
+export interface RetryStarted {
+  ok: true;
   /** The key the item will be sent with. */
   key: string;
   /**
@@ -246,14 +282,15 @@ export interface RetryResult {
  * so a copy that did reach the server is answered with, not duplicated,
  * unless the server refused the key itself as a conflict (see RetryResult).
  */
-export function retry(items: OutboxItem[], key: string, now: number, newKey: () => string, policy: Policy = DEFAULT_POLICY): RetryResult | null {
+export function retry(items: OutboxItem[], key: string, now: number, newKey: () => string, policy: Policy = DEFAULT_POLICY): RetryResult {
   const item = find(items, key);
-  if (!item || statusOf(item, now, policy) !== "stuck") return null;
+  if (!item || item.state === "sent") return { ok: false, reason: "not_found" };
+  if (statusOf(item, now, policy) !== "stuck") return { ok: false, reason: "not_stuck" };
   const replaced = item.stuckReason === "key_conflict";
   if (replaced) item.key = newKey();
   freshStart(item);
   delete item.lastError;
-  return { key: item.key, newKey: replaced };
+  return { ok: true, key: item.key, newKey: replaced };
 }
 
 export type DiscardResult =
@@ -292,10 +329,10 @@ export function nextWakeMs(items: OutboxItem[], now: number, policy: Policy = DE
     if (soonest === undefined || inMs < soonest) soonest = inMs;
   };
   for (const item of items) {
-    if (owner !== undefined && item.owner !== undefined && item.owner !== owner) continue;
+    if (!forOwner(item, owner)) continue;
     if (item.attempts >= policy.maxAttempts || needsConfirmation(item, now, policy)) continue;
     if (isClaimLive(item, now, policy)) consider((item.claimedAt ?? 0) + policy.staleClaimMs + 1);
-    else if ((item.state === "waiting" || item.state === "sending") && item.retryAt !== undefined && item.retryAt > now) consider(item.retryAt);
+    else if ((item.state === "waiting" || item.state === "sending") && !retryDue(item, now, policy)) consider(item.retryAt ?? now);
   }
   return soonest;
 }

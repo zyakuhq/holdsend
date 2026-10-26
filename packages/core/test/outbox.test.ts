@@ -118,7 +118,7 @@ describe("Outbox", () => {
     expect((await outbox.flush()).sent).toBe(0);
     expect((await outbox.list())[0]?.status).toBe("needs_confirmation");
 
-    expect(await outbox.approve(item.key)).toEqual({ key: item.key, newKey: false });
+    expect(await outbox.approve(item.key)).toEqual({ ok: true, key: item.key, newKey: false });
     expect((await outbox.flush()).sent).toBe(1);
     expect(server.created[0]?.key).toBe(item.key);
   });

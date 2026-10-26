@@ -164,7 +164,7 @@ export async function createNotesApp(options = {}) {
       const { rows } = await tx.query("DELETE FROM notes WHERE id = $1 AND owner = $2 RETURNING id", [id, owner]);
       // A late retry of the request that created this note now gets 410
       // gone instead of bringing it back.
-      if (rows.length > 0) await store.tombstoneResource(tx, owner, "note.create", id);
+      if (rows.length > 0) await store.tombstoneResource(tx, { owner, operation: "note.create", resourceRef: id });
       return rows.length > 0;
     });
     if (!deleted) return res.status(404).json({ code: "not_found", message: "No such note." });

@@ -17,6 +17,8 @@ import {
   type CompleteInput,
   type IdempotencyStore,
   type RecordId,
+  type ResourceId,
+  type StoredResult,
   type StoreOptions,
 } from "./types.js";
 
@@ -91,6 +93,7 @@ CREATE TABLE IF NOT EXISTS ${t} (
   claimed_at    TIMESTAMPTZ,
   result_status INTEGER,
   result_body   JSONB,
+  result_headers JSONB,
   resource_ref  TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS ${t} (
   CHECK (state <> 'in_progress' OR (claim_token IS NOT NULL AND claimed_at IS NOT NULL)),
   CHECK (state <> 'completed' OR result_status IS NOT NULL)
 );
+ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS result_headers JSONB;
 CREATE INDEX IF NOT EXISTS "${base}_resource_idx" ON ${t} (owner, operation, resource_ref) WHERE resource_ref IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "${base}_expires_idx" ON ${t} (expires_at) WHERE expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "${base}_claims_idx" ON ${t} (claimed_at) WHERE state = 'in_progress';
@@ -112,6 +116,7 @@ interface Row {
   claimed_at: Date | string | null;
   result_status: number | null;
   result_body: unknown;
+  result_headers: unknown;
 }
 
 function toMs(value: Date | string | null): number {
@@ -163,7 +168,7 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
       if (touched(inserted) === 1) return { type: "claimed", token };
 
       const found = await this.db.query(
-        `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body, expires_at
+        `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body, result_headers, expires_at
            FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3`,
         [input.owner, input.operation, input.key],
       );
@@ -188,7 +193,10 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
     if (row.request_hash !== input.requestHash) return { type: "conflict" };
     if (row.state === "completed") {
       if (row.result_status === null) return { type: "conflict" };
-      return { type: "replay", result: { status: row.result_status, body: parseBody(row.result_body) } };
+      const headers = parseBody(row.result_headers);
+      const result: StoredResult = { status: row.result_status, body: parseBody(row.result_body) };
+      if (headers && typeof headers === "object") result.headers = headers as Record<string, string>;
+      return { type: "replay", result };
     }
     // In progress with the same request. Take over a claim nobody finished,
     // with the same guard completion uses: the old token must still be current.
@@ -215,7 +223,7 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
     const updated = await tx.query(
       `UPDATE ${this.t}
           SET state = 'completed', claim_token = NULL, result_status = $5, result_body = $6::jsonb,
-              resource_ref = $7, expires_at = $8, updated_at = now()
+              result_headers = $9::jsonb, resource_ref = $7, expires_at = $8, updated_at = now()
         WHERE owner = $1 AND operation = $2 AND key = $3 AND state = 'in_progress' AND claim_token = $4
         RETURNING 1`,
       [
@@ -227,6 +235,7 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
         JSON.stringify(input.result.body ?? null),
         input.resourceRef ?? null,
         expiresAt,
+        input.result.headers === undefined ? null : JSON.stringify(input.result.headers),
       ],
     );
     if (touched(updated) !== 1) throw new ClaimLostError();
@@ -239,10 +248,10 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
     );
   }
 
-  async tombstoneResource(tx: Queryable, owner: string, operation: string, resourceRef: string): Promise<number> {
+  async tombstoneResource(tx: Queryable, { owner, operation, resourceRef }: ResourceId): Promise<number> {
     const updated = await tx.query(
       `UPDATE ${this.t}
-          SET state = 'gone', request_hash = '', result_status = NULL, result_body = NULL,
+          SET state = 'gone', request_hash = '', result_status = NULL, result_body = NULL, result_headers = NULL,
               expires_at = NULL, updated_at = now()
         WHERE owner = $1 AND operation = $2 AND resource_ref = $3 AND state = 'completed'
         RETURNING 1`,

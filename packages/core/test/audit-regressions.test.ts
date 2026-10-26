@@ -7,12 +7,12 @@ import {
   MemoryStore,
   NotJsonError,
   Outbox,
-  approve,
   classifyResponse,
   createFlushScheduler,
   type AttemptOutcome,
   type OutboxItem,
 } from "../src/index.js";
+import { approve } from "../src/transitions.js";
 import { FakeServer } from "./fake-server.js";
 
 type Payload = { text: string };
@@ -163,7 +163,7 @@ describe("audit 15: approving an old item whose key the server refused", () => {
     const items: OutboxItem[] = [
       { key: "old-key-0001", kind: "k", payload: {}, writtenAt: now - 40 * 24 * 60 * MIN, state: "stuck", stuckReason: "key_conflict", attempts: 1, touched: true },
     ];
-    expect(approve(items, "old-key-0001", now, undefined, () => "new-key-0001")).toEqual({ key: "new-key-0001", newKey: true });
+    expect(approve(items, "old-key-0001", now, () => "new-key-0001")).toEqual({ ok: true, key: "new-key-0001", newKey: true });
     expect(items[0]).toMatchObject({ key: "new-key-0001", state: "waiting" });
   });
 });

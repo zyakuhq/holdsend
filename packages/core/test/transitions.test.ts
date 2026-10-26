@@ -1,17 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_POLICY,
-  approve,
-  cancel,
-  claim,
-  discard,
-  isSendable,
-  needsConfirmation,
-  retry,
-  settle,
-  statusOf,
-  type OutboxItem,
-} from "../src/index.js";
+import { DEFAULT_POLICY, needsConfirmation, statusOf, type OutboxItem } from "../src/index.js";
+import { approve, cancel, claim, discard, isSendable, retry, settle } from "../src/transitions.js";
 
 const NOW = Date.parse("2026-10-25T12:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -123,7 +112,7 @@ describe("old items", () => {
 
   it("are sent after a person approves, keeping the same key", () => {
     const items = [old()];
-    expect(approve(items, "key-000000001", NOW)).toEqual({ key: "key-000000001", newKey: false });
+    expect(approve(items, "key-000000001", NOW, () => "unused-key-01")).toEqual({ ok: true, key: "key-000000001", newKey: false });
     expect(isSendable(items[0]!, NOW)).toBe(true);
     expect(claim(items, "key-000000001", "t", NOW)?.key).toBe("key-000000001");
   });
@@ -138,19 +127,19 @@ describe("old items", () => {
 describe("retry by a person", () => {
   it("keeps the key after a refusal or exhausted attempts", () => {
     const items = [item({ state: "stuck", stuckReason: "refused", attempts: 1, touched: true })];
-    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ key: "key-000000001", newKey: false });
+    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ ok: true, key: "key-000000001", newKey: false });
     expect(items[0]?.state).toBe("waiting");
     expect(items[0]?.attempts).toBe(0);
   });
 
   it("uses a new key only after a key conflict", () => {
     const items = [item({ state: "stuck", stuckReason: "key_conflict", attempts: 1, touched: true })];
-    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ key: "fresh-key-0001", newKey: true });
+    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ ok: true, key: "fresh-key-0001", newKey: true });
   });
 
   it("does nothing for an item that is not stuck", () => {
     const items = [item()];
-    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toBeNull();
+    expect(retry(items, "key-000000001", NOW, () => "fresh-key-0001")).toEqual({ ok: false, reason: "not_stuck" });
   });
 });
 

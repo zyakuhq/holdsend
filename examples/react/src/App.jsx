@@ -138,7 +138,7 @@ export function App({ outbox, owner, durable }) {
     },
     approve: async (item) => {
       const result = await outbox.approve(item.key);
-      return result?.newKey ? "Sending with a new key. If an earlier version reached the server, there may be two copies." : undefined;
+      return result.ok && result.newKey ? "Sending with a new key. If an earlier version reached the server, there may be two copies." : undefined;
     },
     retry: async (item) => {
       if (item.stuckReason === "key_conflict") {

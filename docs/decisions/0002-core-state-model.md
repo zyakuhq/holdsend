@@ -36,6 +36,13 @@ Date: 2026-10-25. Status: accepted.
 - Each attempt abandoned at its timeout doubles the next one (up to 16 times `attemptTimeoutMs`), so an upload slower than the timeout can still finish.
 - `approve` reports `{ key, newKey }` like `retry`, because approving an item whose key was refused gives it a new key.
 
+## Amended 2026-10-26 after the third audit
+
+- Policy options are merged without letting `undefined` replace a default, and every value is checked (`resolvePolicy`). The result is frozen.
+- `approve()` and `retry()` return `{ ok: true, key, newKey }` or `{ ok: false, reason }`, and take their arguments in the same order. The state machine's own functions (claim, settle, renewal) are no longer exported, so they can change without breaking anyone.
+- A claim or a backoff stamped while the device clock was ahead no longer freezes an item until real time catches up.
+- Items added without an owner are sent only by a flush for no owner, never by a flush for one signed-in person.
+
 ## Consequences
 
 - Platform stores must implement a real atomic `update`. A store that loses a write breaks exactly-once on the client side; the server key still prevents duplicates, but cancel and status would be wrong. Each platform package will ship its own concurrency tests.

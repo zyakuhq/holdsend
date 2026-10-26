@@ -5,9 +5,10 @@ export type {
   ItemStatus,
   OutboxItem,
   Policy,
+  PolicyOptions,
   StuckReason,
 } from "./types.js";
-export { DEFAULT_POLICY } from "./types.js";
+export { DEFAULT_POLICY, resolvePolicy } from "./types.js";
 
 export { KEY_PATTERN, isValidKey, newKey } from "./key.js";
 
@@ -32,24 +33,9 @@ export {
   type RequestHeaderOptions,
 } from "./protocol.js";
 
-export {
-  approve,
-  cancel,
-  claim,
-  discard,
-  isClaimLive,
-  isSendable,
-  needsConfirmation,
-  nextWakeMs,
-  pruneSent,
-  renewClaim,
-  retry,
-  settle,
-  statusOf,
-  type CancelResult,
-  type DiscardResult,
-  type RetryResult,
-} from "./transitions.js";
+// The state machine itself (claim, settle, renewal and the rest) stays
+// internal, so it can change without breaking anyone; use Outbox.
+export { needsConfirmation, statusOf, type CancelResult, type DiscardResult, type RetryResult, type RetryStarted } from "./transitions.js";
 
 export { NotJsonError, assertPlainJson } from "./json.js";
 
