@@ -56,7 +56,13 @@ export const PAGES = [
       ["0006 React Native store", "docs/decisions/0006-react-native-store-and-scheduler.md"],
     ],
   ],
-  ["Audits", [["First independent audit", "docs/audits/2026-10-25-first-independent-audit.md"]]],
+  [
+    "Audits",
+    [
+      ["First and second audits", "docs/audits/2026-10-25-first-independent-audit.md"],
+      ["Third audit (before 0.1.0)", "docs/audits/2026-10-26-third-audit.md"],
+    ],
+  ],
   [
     "Project",
     [
