@@ -13,12 +13,13 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PACKAGES = ["core", "server", "web", "react-native"];
-const ALLOWED = [/^package\.json$/, /^README\.md$/, /^LICENSE$/, /^dist\/.+\.(js|d\.ts|js\.map|d\.ts\.map)$/];
+const ALLOWED = [/^package\.json$/, /^README\.md$/, /^LICENSE$/, /^NOTICE$/, /^dist\/.+\.(js|d\.ts|js\.map|d\.ts\.map)$/];
 
 const problems = [];
 const manifests = PACKAGES.map((dir) => ({ dir, pkg: JSON.parse(readFileSync(join(ROOT, "packages", dir, "package.json"), "utf8")) }));
 const version = manifests[0].pkg.version;
 const rootLicense = readFileSync(join(ROOT, "LICENSE"), "utf8");
+const rootNotice = readFileSync(join(ROOT, "NOTICE"), "utf8");
 
 for (const { dir, pkg } of manifests) {
   const where = `packages/${dir}`;
@@ -35,6 +36,7 @@ for (const { dir, pkg } of manifests) {
     if (!pkg[field]) fail(`missing ${field}`);
   }
   if (readFileSync(join(ROOT, where, "LICENSE"), "utf8") !== rootLicense) fail("LICENSE differs from the repository's LICENSE");
+  if (readFileSync(join(ROOT, where, "NOTICE"), "utf8") !== rootNotice) fail("NOTICE differs from the repository's NOTICE");
 
   // The files npm would put in the tarball.
   const [packed] = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: join(ROOT, where), encoding: "utf8" }));
@@ -42,7 +44,7 @@ for (const { dir, pkg } of manifests) {
   for (const file of files) {
     if (!ALLOWED.some((re) => re.test(file))) fail(`would publish ${file}`);
   }
-  for (const required of ["package.json", "README.md", "LICENSE"]) {
+  for (const required of ["package.json", "README.md", "LICENSE", "NOTICE"]) {
     if (!files.includes(required)) fail(`would not publish ${required}`);
   }
 
@@ -79,4 +81,4 @@ if (problems.length) {
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }
-console.log(`check-packages: ${PACKAGES.length} packages at ${version} would publish only their build output, README and LICENSE`);
+console.log(`check-packages: ${PACKAGES.length} packages at ${version} would publish only their build output, README, LICENSE and NOTICE`);

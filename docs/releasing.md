@@ -2,9 +2,11 @@
 
 All four packages share one version and are published together by the Release workflow ([.github/workflows/release.yml](../.github/workflows/release.yml)), with npm provenance.
 
-1. Move the "unreleased" section of [CHANGELOG.md](../CHANGELOG.md) under the version and date.
-2. Set the same version in every `packages/*/package.json`, and in their `@holdsend/core` dependency. `npm run check` fails if they disagree, or if a package would publish anything but its build output, README and LICENSE.
-3. Run the Release workflow by hand with "dry run" on, and read what it would publish.
-4. Merge, then push a tag `v<version>` on that commit. The workflow checks the tag against the versions, runs every check, publishes core first and then the rest, and creates the GitHub release.
+1. Update every status line that says "unreleased" or "nothing published yet" (README, package READMEs, SECURITY, protocol), and move the "unreleased" section of [CHANGELOG.md](../CHANGELOG.md) under the version and date.
+2. Set the same version in every `packages/*/package.json`, and in their `@holdsend/core` dependency. `npm run check` fails if they disagree, if a package would publish anything but its build output, README, LICENSE and NOTICE, or if a package cannot be loaded with import and require.
+3. Run the Release workflow by hand. A manual run always dry-runs; read what it would publish.
+4. Merge, then push a tag `v<version>` on that commit. The workflow builds and checks without any secret, then waits for a reviewer of the `npm-release` environment (the project lead) to approve publishing. It publishes core first and then the rest, skipping any version already on npm (so a re-run finishes a half-done release), and creates the GitHub release.
 
-Publishing uses the `NPM_TOKEN` repository secret until npm trusted publishing is set up for each package; after that the token is deleted. A release is never published without the project lead's go-ahead.
+A version with a dash (for example `0.2.0-rc.1`) is published under the `next` tag, never `latest`.
+
+Publishing uses the `NPM_TOKEN` secret until npm trusted publishing is set up for each package; after that the token is deleted. A release is never published without the project lead's approval in the `npm-release` environment.
