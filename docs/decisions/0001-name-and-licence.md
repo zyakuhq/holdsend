@@ -8,7 +8,7 @@ The working name was SendOnce ("write offline, publish exactly once"). Before cr
 
 - `sendonce` is already published on npm by an unrelated author (October 2026).
 - Several unrelated GitHub repositories are named SendOnce, including email tools in the same space.
-- The nearest alternatives, PostOnce and PublishOnce, are names of existing social media posting products.
+- The nearest alternatives we considered are already names of existing products.
 
 A name that collides with other packages confuses users, search results and npm installs, and invites a trademark question later.
 

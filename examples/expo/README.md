@@ -4,12 +4,12 @@ The [notes example](../notes) as an Expo app for Android and iOS, over [`@holdse
 
 ## Run it on your phone
 
-1. Start the notes server on your computer, from the repository root:
+1. Start the notes server on your computer, from the repository root. `HOST=0.0.0.0` lets your phone reach it; do this only on a network you trust, because the demo's sign-in can be forged:
 
    ```sh
    npm install
    npm run build
-   npm start --workspace holdsend-example-notes
+   HOST=0.0.0.0 npm start --workspace holdsend-example-notes
    ```
 
 2. Find your computer's address on your Wi-Fi network (it usually starts with `192.168.` or `10.`). On a phone, `localhost` is the phone itself, so the app needs this address.
