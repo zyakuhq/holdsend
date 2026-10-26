@@ -76,8 +76,12 @@ export async function createNotesApp(options = {}) {
   const store = new PostgresIdempotencyStore({ db: database.db, transaction: database.transaction });
 
   // options.page lets another example serve its own page with this server.
+  // options.staticDir serves an app that was built elsewhere (the Expo web
+  // export); otherwise the page is bundled here.
   const pageFiles = options.page ?? { entry: here("./client.mjs"), html: here("../public/index.html") };
-  const [client, indexHtml] = await Promise.all([bundleClient(pageFiles.entry, options.development === true), readFile(pageFiles.html, "utf8")]);
+  const [client, indexHtml] = options.staticDir
+    ? [null, null]
+    : await Promise.all([bundleClient(pageFiles.entry, options.development === true), readFile(pageFiles.html, "utf8")]);
   // Owners who asked to lose the answer to their next note (the demo button).
   const loseNextAnswer = new Set();
   // For tests: how many answers were really dropped.
@@ -90,9 +94,13 @@ export async function createNotesApp(options = {}) {
   const page = (type, body) => (_req, res) => {
     res.set({ "content-type": type, "cache-control": "no-cache" }).send(body);
   };
-  app.get("/", page("text/html; charset=utf-8", indexHtml));
-  app.get("/app.js", page("text/javascript; charset=utf-8", client["app.js"]));
-  app.get("/sw.js", page("text/javascript; charset=utf-8", client["sw.js"]));
+  if (options.staticDir) {
+    app.use(express.static(options.staticDir, { index: "index.html" }));
+  } else {
+    app.get("/", page("text/html; charset=utf-8", indexHtml));
+    app.get("/app.js", page("text/javascript; charset=utf-8", client["app.js"]));
+    app.get("/sw.js", page("text/javascript; charset=utf-8", client["sw.js"]));
+  }
 
   // Every API route needs the demo user.
   app.use("/api", (req, res, next) => {

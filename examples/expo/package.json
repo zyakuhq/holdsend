@@ -1,0 +1,31 @@
+{
+  "name": "holdsend-example-expo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The notes example as an Expo app for Android and iOS, over @holdsend/react-native.",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "export:web": "CI=1 EXPO_OFFLINE=1 expo export --platform web --output-dir dist-web",
+    "e2e": "npm run export:web && node --test test/e2e.test.mjs"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~58.0.15",
+    "@holdsend/core": "*",
+    "@holdsend/react-native": "*",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo": "~58.0.19",
+    "expo-crypto": "~58.0.7",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-web": "~0.21.4"
+  }
+}
