@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/zyakuhq/holdsend/security/advisories/new
+    about: Please do not open a public issue for security problems.
+  - name: Read the docs
+    url: https://zyakuhq.github.io/holdsend/
+    about: Guides for every package, the wire protocol and the examples.

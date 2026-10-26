@@ -41,6 +41,8 @@ export const PAGES = [
       ["How it is tested", "docs/testing.md"],
       ["Design notes", "docs/reference-notes.md"],
       ["Status and roadmap", "docs/STATUS.md"],
+      ["Changelog", "CHANGELOG.md"],
+      ["Releasing", "docs/releasing.md"],
     ],
   ],
   [

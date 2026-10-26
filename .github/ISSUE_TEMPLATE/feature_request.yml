@@ -1,0 +1,24 @@
+name: Idea or request
+description: Something HoldSend should do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are people trying to do, and where does HoldSend get in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you suggest
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Where it matters
+      description: The app, the platform and the network conditions, if you can share them.
+    validations:
+      required: false

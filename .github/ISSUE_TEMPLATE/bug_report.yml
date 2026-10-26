@@ -1,0 +1,43 @@
+name: Bug report
+description: Something HoldSend does wrong, especially anything sent twice or lost.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time. Please use only made-up data in examples and logs; this tracker is public.
+        Security problems go to the private report form instead (see SECURITY.md).
+  - type: input
+    id: packages
+    attributes:
+      label: Packages and versions
+      placeholder: "@holdsend/core 0.1.0, @holdsend/web 0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Chrome 140 on Android 15, Safari on iOS 19, React Native 0.88, Node 22 with Postgres 16"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Was something sent twice, lost, stuck, or shown with the wrong status?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest steps or code you can share. Network conditions (offline, slow, lost answers) help a lot.
+    validations:
+      required: true
