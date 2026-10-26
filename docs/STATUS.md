@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-26 (evening, third audit)
+Last updated: 2026-10-26 (night, third audit fixed)
 
 ## Done
 
@@ -20,17 +20,18 @@ Last updated: 2026-10-26 (evening, third audit)
 - Docs site at https://zyakuhq.github.io/holdsend/, built from the repository's Markdown by `scripts/build-site.mjs` and published by the Docs site workflow on every push to main. A test checks that every link on it works.
 - Expo example in [examples/expo](../examples/expo): the notes app on Android and iOS over `@holdsend/react-native` (AsyncStorage store, NetInfo and AppState auto-flush, `expo-crypto` keys). Its web build runs five browser scenarios in CI; the Android and iOS bundles build, but nothing runs on a device or emulator in CI yet. Reviewed independently; findings fixed.
 - Release preparation: all packages at 0.1.0 with publish metadata (public access, provenance, licence in each package), `scripts/check-packages.mjs` in `npm run check` (only build output, README and LICENSE may be published), CHANGELOG, issue and pull request templates, the Release workflow (tag `v*` publishes; manual runs can dry-run) and [releasing.md](releasing.md). The `@holdsend` npm organisation and the `NPM_TOKEN` secret exist (2026-10-26).
+- Third independent audit before 0.1.0: 31 findings across core and server, web and React Native, and docs, examples and the release workflow. Every "before 0.1.0" item is fixed or decided, with regression tests ([audits/2026-10-26-third-audit.md](audits/2026-10-26-third-audit.md)).
 - Example: a notes app (Express + Postgres or PGlite, plain browser page, service worker) in [examples/notes](../examples/notes), with browser tests in CI for airplane mode, a lost answer, two tabs, arrival ordering and the offline feed. Reviewed independently; the review's findings were fixed (background sync waits for a busy tab, the worker sends only the signed-in person's notes, keys are required, the outbox actions report what happened).
 
 ## In progress
 
-- Fixing the third audit ([audits/2026-10-26-third-audit.md](audits/2026-10-26-third-audit.md)) in four pull requests: core and server, web and React Native, release workflow, docs and examples. These touch `packages/`, `.github/` and the docs; avoid parallel changes there until they merge.
+- Nothing open.
 
 ## Next three tasks
 
-1. Finish the third-audit fixes (above).
-2. Draft the October one-page report and a Show HN post for the project lead to review (not in the public repo).
-3. With the project lead's go-ahead: tag v0.1.0, publish, set up npm trusted publishing for each package and delete the `NPM_TOKEN` secret.
+1. Draft the October one-page report and a Show HN post for the project lead to review (kept out of the public repo).
+2. Once the project lead is a required reviewer of the `npm-release` environment and gives the go-ahead: tag v0.1.0 (after step 1 of [releasing.md](releasing.md)), then set up npm trusted publishing for each package and delete the `NPM_TOKEN` secret.
+3. After 0.1.0: the emergency module (Phase 2).
 
 ## After that
 
@@ -40,7 +41,7 @@ Last updated: 2026-10-26 (evening, third audit)
 
 ## Blockers
 
-- None. The v0.1.0 publish waits for the project lead's go-ahead.
+- The v0.1.0 publish waits for the project lead: a required reviewer on the `npm-release` environment, and the go-ahead.
 
 ## Resolved
 
