@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-26 (after the Expo example)
+Last updated: 2026-10-26 (evening, third audit)
 
 ## Done
 
@@ -24,13 +24,13 @@ Last updated: 2026-10-26 (after the Expo example)
 
 ## In progress
 
-- Nothing open.
+- Fixing the third audit ([audits/2026-10-26-third-audit.md](audits/2026-10-26-third-audit.md)) in four pull requests: core and server, web and React Native, release workflow, docs and examples. These touch `packages/`, `.github/` and the docs; avoid parallel changes there until they merge.
 
 ## Next three tasks
 
-1. Third independent audit before v0.1.0, focused on the public API, the docs, the examples and the release workflow. Fix what it finds.
-2. Dry-run the Release workflow and read what it would publish.
-3. With the project lead's go-ahead: tag v0.1.0, publish, then set up npm trusted publishing for each package and delete the `NPM_TOKEN` secret.
+1. Finish the third-audit fixes (above).
+2. Draft the October one-page report and a Show HN post for the project lead to review (not in the public repo).
+3. With the project lead's go-ahead: tag v0.1.0, publish, set up npm trusted publishing for each package and delete the `NPM_TOKEN` secret.
 
 ## After that
 
