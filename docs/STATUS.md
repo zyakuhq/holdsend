@@ -25,12 +25,12 @@ Last updated: 2026-10-26 (night, third audit fixed)
 
 ## In progress
 
-- Nothing open.
+- v0.1.0: tagged after the project lead's go-ahead (2026-10-26); the Release workflow publishes once the project lead approves it in the `npm-release` environment.
 
 ## Next three tasks
 
 1. Draft the October one-page report and a Show HN post for the project lead to review (kept out of the public repo).
-2. Once the project lead is a required reviewer of the `npm-release` environment and gives the go-ahead: tag v0.1.0 (after step 1 of [releasing.md](releasing.md)), then set up npm trusted publishing for each package and delete the `NPM_TOKEN` secret.
+2. After 0.1.0 is on npm: set up npm trusted publishing for each package, then delete the `NPM_TOKEN` secret.
 3. After 0.1.0: the emergency module (Phase 2).
 
 ## After that
@@ -41,7 +41,7 @@ Last updated: 2026-10-26 (night, third audit fixed)
 
 ## Blockers
 
-- The v0.1.0 publish waits for the project lead: a required reviewer on the `npm-release` environment, and the go-ahead.
+- The v0.1.0 publish waits for the project lead's approval in the `npm-release` environment (he is its only required reviewer; administrators cannot bypass it).
 
 ## Resolved
 

@@ -2,7 +2,7 @@
 
 The server half of [HoldSend](https://github.com/zyakuhq/holdsend). It turns a client's retries into one write.
 
-> Early and unreleased. The API may change before 0.1.0.
+> Early: 0.1.0 is the first release. The API may change before 1.0, and it is not ready for production yet.
 
 ## What it does
 

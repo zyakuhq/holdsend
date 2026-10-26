@@ -6,7 +6,7 @@ Exactly once needs the server's half too: the server must store each key with it
 
 No runtime dependencies. ESM. Under 5 KB minified and gzipped (a CI budget).
 
-> Early and unreleased. The API may change before 0.1.0.
+> Early: 0.1.0 is the first release. The API may change before 1.0, and it is not ready for production yet.
 
 ## What is in it
 
