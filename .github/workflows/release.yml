@@ -12,6 +12,9 @@ name: Release
 #   job installs without running any package's install scripts, and its
 #   checkout keeps no GitHub token.
 # - A re-run after a half-finished release skips what is already on npm.
+# - npm trusted publishing: npm checks a short-lived GitHub identity for
+#   this repository, release.yml and the npm-release environment. There is
+#   no npm token anywhere.
 
 on:
   push:
@@ -68,15 +71,20 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: Use an npm that supports trusted publishing (11.5.1 or later)
+        run: |
+          if ! node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)"; then
+            npm install -g npm@11.6.2 --ignore-scripts
+          fi
+          npm --version
       - name: Install the packages and the root build tools, without install scripts
         run: npm ci --ignore-scripts --include-workspace-root --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
       - name: Build
         run: npm run build --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
       - name: Publish (core first; skips versions already on npm)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.verify.outputs.version }}
           DRY_RUN: ${{ github.ref_type != 'tag' }}
         run: |

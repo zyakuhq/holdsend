@@ -9,4 +9,4 @@ All four packages share one version and are published together by the Release wo
 
 A version with a dash (for example `0.2.0-rc.1`) is published under the `next` tag, never `latest`.
 
-Publishing uses the `NPM_TOKEN` secret until npm trusted publishing is set up for each package; after that the token is deleted. A release is never published without the project lead's approval in the `npm-release` environment.
+Publishing uses npm trusted publishing: each package on npm trusts this repository's `release.yml` in the `npm-release` environment, and the workflow proves who it is with a short-lived GitHub identity. There is no npm token, so there is nothing to leak or rotate. A release is never published without the project lead's approval in the `npm-release` environment.
