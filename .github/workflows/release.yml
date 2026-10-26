@@ -15,6 +15,8 @@ name: Release
 # - npm trusted publishing: npm checks a short-lived GitHub identity for
 #   this repository, release.yml and the npm-release environment. There is
 #   no npm token anywhere.
+# - Staged publishing: the workflow only stages each version. It goes live
+#   when a maintainer approves it on npmjs.com with 2FA.
 
 on:
   push:
@@ -73,17 +75,20 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Use an npm that supports trusted publishing (11.5.1 or later)
+      - name: Use an npm with staged publishing (11.15.0 or later)
         run: |
-          if ! node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)"; then
-            npm install -g npm@11.6.2 --ignore-scripts
+          if ! node -e 'const [a,b]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&b>=15)?0:1)' "$(npm --version)"; then
+            npm install -g npm@11.15.0 --ignore-scripts
           fi
           npm --version
       - name: Install the packages and the root build tools, without install scripts
         run: npm ci --ignore-scripts --include-workspace-root --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
       - name: Build
         run: npm run build --workspace packages/core --workspace packages/server --workspace packages/web --workspace packages/react-native
-      - name: Publish (core first; skips versions already on npm)
+      # Each package's trusted publisher allows staging only. A staged version
+      # is not installable until a maintainer approves it on npmjs.com with
+      # 2FA, so a release needs two human approvals: this environment, and npm.
+      - name: Stage for publishing (core first; skips versions already on npm)
         env:
           VERSION: ${{ needs.verify.outputs.version }}
           DRY_RUN: ${{ github.ref_type != 'tag' }}
@@ -97,8 +102,11 @@ jobs:
               echo "@holdsend/$pkg@$VERSION is already on npm; skipping."
               continue
             fi
-            npm publish --workspace "packages/$pkg" $flags
+            npm stage publish --workspace "packages/$pkg" $flags
           done
+          if [ "$DRY_RUN" != "true" ]; then
+            echo "Staged. Approve each package on npmjs.com (core first) to make it installable."
+          fi
 
   github-release:
     name: GitHub release

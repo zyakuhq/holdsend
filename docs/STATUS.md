@@ -26,12 +26,12 @@ Last updated: 2026-10-26 (night, 0.1.0 published)
 
 ## In progress
 
-- Moving publishing to npm trusted publishing. The workflow no longer reads a token; the project lead adds the trusted publisher to each package on npm and deletes the `NPM_TOKEN` secret and the npm token.
+- Moving publishing to npm trusted publishing with staged publishing (2026-10-26). The workflow stages each package with no token; the project lead approves it on npmjs.com with 2FA. The trusted publisher on `@holdsend/core` is set up and pending validation, which needs one publish through it before 2026-10-28 16:07 UTC.
 
 ## Next three tasks
 
 1. Draft the October one-page report and a Show HN post for the project lead to review (kept out of the public repo).
-2. Confirm trusted publishing works on the next release (0.1.1 or 0.2.0), with no token.
+2. Release 0.1.1 through the trusted publishers before 2026-10-28 16:07 UTC, so npm validates them; confirm it works with no token.
 3. The emergency module (Phase 2).
 
 ## After that
@@ -42,7 +42,7 @@ Last updated: 2026-10-26 (night, 0.1.0 published)
 
 ## Blockers
 
-- The project lead adds the trusted publisher to each package on npm, then deletes the `NPM_TOKEN` secret and the npm token.
+- The project lead adds the trusted publisher (stage only) to `server`, `web` and `react-native` on npm, sets publishing access to disallow tokens on all four, then deletes the `NPM_TOKEN` secret and the npm token.
 
 ## Resolved
 
