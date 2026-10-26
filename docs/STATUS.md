@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-25 (night, after the React example)
+Last updated: 2026-10-26 (after the Expo example)
 
 ## Done
 
@@ -18,6 +18,7 @@ Last updated: 2026-10-25 (night, after the React example)
 - Decisions 0001 to 0006.
 - React example in [examples/react](../examples/react): copyable hooks (`useOutboxEntries`, `useAutoFlush`, `useOnline`) and the notes app in React, passing the same browser scenarios as the plain page in a development build (StrictMode on). Reviewed independently; findings fixed.
 - Docs site at https://zyakuhq.github.io/holdsend/, built from the repository's Markdown by `scripts/build-site.mjs` and published by the Docs site workflow on every push to main. A test checks that every link on it works.
+- Expo example in [examples/expo](../examples/expo): the notes app on Android and iOS over `@holdsend/react-native` (AsyncStorage store, NetInfo and AppState auto-flush, `expo-crypto` keys). Its web build runs five browser scenarios in CI; the Android and iOS bundles build, but nothing runs on a device or emulator in CI yet. Reviewed independently; findings fixed.
 - Example: a notes app (Express + Postgres or PGlite, plain browser page, service worker) in [examples/notes](../examples/notes), with browser tests in CI for airplane mode, a lost answer, two tabs, arrival ordering and the offline feed. Reviewed independently; the review's findings were fixed (background sync waits for a busy tab, the worker sends only the signed-in person's notes, keys are required, the outbox actions report what happened).
 
 ## In progress
@@ -26,9 +27,9 @@ Last updated: 2026-10-25 (night, after the React example)
 
 ## Next three tasks
 
-1. An Expo example over `@holdsend/react-native` (airplane mode on Android and iOS, tested in an emulator where CI allows).
-2. Prepare v0.1.0: CHANGELOG, issue templates, "good first issue" labels, package metadata and a publish workflow with provenance. Publishing needs the `@holdsend` npm organisation and an `NPM_TOKEN` repository secret from the project lead.
-3. Third independent audit before v0.1.0, focused on the docs, examples and public API.
+1. Prepare v0.1.0: CHANGELOG, issue and pull request templates, "good first issue" labels, package metadata and a publish workflow with provenance. Publishing needs the `@holdsend` npm organisation and an `NPM_TOKEN` repository secret from the project lead.
+2. Third independent audit before v0.1.0, focused on the docs, examples and public API.
+3. Run the Expo example on an Android emulator in CI if a free runner can do it; otherwise document a manual device check for each release.
 
 ## After that
 

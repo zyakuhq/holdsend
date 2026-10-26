@@ -8,3 +8,5 @@ coverage/
 # Private, never committed: extra terms for the local PII scan (one per line).
 .pii-denylist
 site/
+examples/expo/dist-web/
+.expo/

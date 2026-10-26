@@ -31,6 +31,7 @@ export const PAGES = [
     [
       ["Notes (plain web)", "examples/notes/README.md"],
       ["Notes in React", "examples/react/README.md"],
+      ["Notes on a phone (Expo)", "examples/expo/README.md"],
     ],
   ],
   [

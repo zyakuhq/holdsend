@@ -3,7 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**"] },
+  { ignores: ["**/dist/**", "**/dist-web/**", "**/.expo/**", "**/node_modules/**", "**/coverage/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -22,8 +22,13 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["examples/**/src/client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs", "examples/react/src/**/*.{js,jsx}"],
+    files: ["examples/**/src/client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs", "examples/react/src/**/*.{js,jsx}", "examples/expo/src/**/*.js", "examples/expo/index.js"],
     languageOptions: { globals: globals.browser, parserOptions: { ecmaFeatures: { jsx: true } } },
+  },
+  {
+    // Expo inlines process.env.EXPO_PUBLIC_* values when it bundles the app.
+    files: ["examples/expo/src/**/*.js"],
+    languageOptions: { globals: { process: "readonly" } },
   },
   {
     files: ["examples/**/src/sw.mjs"],
