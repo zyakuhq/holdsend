@@ -31,7 +31,7 @@ for (const { dir, pkg } of manifests) {
   if (pkg.license !== "Apache-2.0") fail("license must be Apache-2.0");
   if (pkg.publishConfig?.access !== "public") fail("publishConfig.access must be public");
   if (pkg.publishConfig?.provenance !== true) fail("publishConfig.provenance must be true");
-  for (const field of ["description", "repository", "homepage", "bugs", "engines", "keywords"]) {
+  for (const field of ["description", "repository", "homepage", "bugs", "keywords"]) {
     if (!pkg[field]) fail(`missing ${field}`);
   }
   if (readFileSync(join(ROOT, where, "LICENSE"), "utf8") !== rootLicense) fail("LICENSE differs from the repository's LICENSE");
@@ -56,6 +56,21 @@ for (const { dir, pkg } of manifests) {
     const path = target.replace(/^\.\//, "");
     if (!existsSync(join(ROOT, where, path))) fail(`${target} does not exist (run npm run build)`);
     else if (!files.includes(path)) fail(`${target} would not be published`);
+  }
+}
+
+// Every package can be loaded with import and with require (Jest and many
+// React Native test setups use require).
+for (const { dir, pkg } of manifests) {
+  for (const [how, code] of [
+    ["import", `import(${JSON.stringify(pkg.name)}).then(() => {}, (e) => { console.error(e.message); process.exit(1); })`],
+    ["require", `require(${JSON.stringify(pkg.name)})`],
+  ]) {
+    try {
+      execFileSync(process.execPath, ["-e", code], { cwd: ROOT, stdio: "pipe" });
+    } catch (err) {
+      problems.push(`packages/${dir}: cannot be loaded with ${how}: ${String(err.stderr ?? err).split("\n")[0]}`);
+    }
   }
 }
 

@@ -7,9 +7,11 @@
  * stores that keep this promise (IndexedDB transactions plus a cross-tab lock
  * on the web, a serialised queue on React Native).
  *
- * Items must survive app close, force-close and reload. A store that cannot
- * promise that (private browsing, blocked storage) must say so through
- * `isDurable`, so the app can warn the person before they close it.
+ * Items must survive app close, force-close and reload. A store that knows it
+ * cannot promise that (memory only, blocked storage) must say so through
+ * `isDurable`, so the app can warn the person before they close it. Some
+ * cases cannot be detected: a private browser window usually reports true,
+ * and some browsers clear a site's storage after a long time unused.
  */
 import type { OutboxItem } from "./types.js";
 
@@ -22,7 +24,7 @@ export interface Store<P = unknown> {
    * saved.
    */
   update<T>(fn: (items: OutboxItem<P>[]) => T): Promise<T>;
-  /** True if items survive the app being closed. */
+  /** False when items are known not to survive the app being closed (see above for what cannot be detected). */
   isDurable(): Promise<boolean>;
 }
 

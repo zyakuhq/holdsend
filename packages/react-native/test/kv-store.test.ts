@@ -194,3 +194,29 @@ describe("second audit N2: an outbox at the size limit", () => {
     expect(await store.read()).toEqual([]);
   });
 });
+
+describe("third audit B7: the size limit", () => {
+  it("also refuses growing an item in place past the limit", async () => {
+    const { OutboxTooLargeError } = await import("../src/index.js");
+    const store = new KeyValueStore<Payload>(fakeAsyncStorage(), { maxBytes: 1_000 });
+    await store.update((items) => void items.push(item("item-key-0001")));
+    await expect(
+      store.update((items) => {
+        items[0]!.payload = { text: "z".repeat(6_000) };
+      }),
+    ).rejects.toBeInstanceOf(OutboxTooLargeError);
+  });
+});
+
+describe("third audit B8: a corrupt outbox", () => {
+  it("keeps the stored text off the error's enumerable properties", async () => {
+    const { CorruptOutboxError } = await import("../src/index.js");
+    const storage = fakeAsyncStorage();
+    await storage.setItem("holdsend:outbox", "{not json: private words");
+    const err = await new KeyValueStore<Payload>(storage).read().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CorruptOutboxError);
+    expect((err as InstanceType<typeof CorruptOutboxError>).raw).toContain("private words");
+    expect(JSON.stringify(err)).not.toContain("private words");
+    expect(Object.keys(err as object)).not.toContain("raw");
+  });
+});

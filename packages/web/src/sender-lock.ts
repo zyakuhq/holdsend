@@ -119,10 +119,22 @@ export class SenderLock {
     this.busy = true;
     try {
       if (this.webLocks) {
-        return await this.webLocks.request(this.name, { ifAvailable: true }, async (granted): Promise<LockedRun<T>> =>
-          granted ? { ran: true, via: "web-lock", value: await task() } : { ran: false },
-        );
+        let started = false;
+        try {
+          return await this.webLocks.request(this.name, { ifAvailable: true }, async (granted): Promise<LockedRun<T>> => {
+            if (!granted) return { ran: false };
+            started = true;
+            return { ran: true, via: "web-lock", value: await task() };
+          });
+        } catch (err) {
+          // The task's own failure is the caller's to see. But a refusal
+          // before the task ran (Web Locks exist yet throw SecurityError in a
+          // sandboxed iframe or with site data blocked) must not stop
+          // sending for good: fall back to the next way below.
+          if (started) throw err;
+        }
       }
+      // The lease itself falls back to running alone when storage refuses writes.
       if (this.leaseStorage) return await this.underLease(this.leaseStorage, task);
       return { ran: true, via: "alone", value: await task() };
     } finally {

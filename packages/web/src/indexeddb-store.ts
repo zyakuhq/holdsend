@@ -22,6 +22,12 @@ export interface IndexedDbStoreOptions {
 
 const ITEMS = "items";
 const META = "meta";
+/**
+ * The database schema version. Policy: a later HoldSend version may only add
+ * to this schema in an upgrade that older code can still read, and must never
+ * bump it without that. A tab still running an older version gets a
+ * versionchange event, closes its connection and reopens on next use.
+ */
 const VERSION = 1;
 
 function promisify<T>(request: IDBRequest<T>): Promise<T> {

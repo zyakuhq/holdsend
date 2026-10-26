@@ -29,10 +29,22 @@ export interface MmkvLike {
 }
 
 /** Thrown when the stored queue cannot be read as a queue. The stored value is left untouched. */
+/**
+ * The stored outbox could not be read. Nothing was changed: every update
+ * fails until the app decides what to do. `raw` holds the stored text, which
+ * is the person's own writing, so it is not enumerable: error reporters that
+ * copy an error's properties will not send it anywhere.
+ *
+ * To recover: show the person that waiting items could not be read, save
+ * `raw` somewhere they can get it back from if you can, then remove the
+ * storage key (the store's `key` option) so a new, empty outbox starts.
+ */
 export class CorruptOutboxError extends Error {
-  constructor(readonly raw: string) {
+  declare readonly raw: string;
+  constructor(raw: string) {
     super("the stored outbox is not valid JSON or not a list; it was left untouched");
     this.name = "CorruptOutboxError";
+    Object.defineProperty(this, "raw", { value: raw, enumerable: false });
   }
 }
 
@@ -51,6 +63,9 @@ export interface KeyValueStoreOptions {
 }
 
 /** Thrown instead of writing a queue too large to be read back safely. Nothing is written. */
+/** How much an update that adds nothing may grow the queue when it is over the limit: room for the fields that settling an attempt records. */
+const SETTLE_SLACK_BYTES = 4096;
+
 export class OutboxTooLargeError extends Error {
   constructor(readonly bytes: number, readonly maxBytes: number) {
     super(`the outbox would be ${bytes} bytes, over the ${maxBytes}-byte limit; nothing was written`);
@@ -137,8 +152,10 @@ export class KeyValueStore<P = unknown> implements Store<P> {
 
   update<T>(fn: (items: OutboxItem<P>[]) => T): Promise<T> {
     const run = chainFor(this.backend, this.key).then(async () => {
-      const items = parse<P>(await this.backend.getItem(this.key));
+      const stored = await this.backend.getItem(this.key);
+      const items = parse<P>(stored);
       const countBefore = items.length;
+      const bytesBefore = stored === null ? 0 : utf8Bytes(stored);
       const value = fn(items);
       if (value instanceof Promise) throw new TypeError("Store.update callbacks must be synchronous");
       const keys = new Set<string>();
@@ -148,10 +165,12 @@ export class KeyValueStore<P = unknown> implements Store<P> {
       }
       const text = JSON.stringify(items);
       const bytes = utf8Bytes(text);
-      // Only an update that adds items is refused for size. Updates that send,
-      // settle or remove items must still go through when the outbox is near
-      // the limit, or a full outbox could never drain.
-      if (bytes > this.maxBytes && items.length > countBefore) throw new OutboxTooLargeError(bytes, this.maxBytes);
+      // Over the limit, refuse updates that add items or grow the queue by
+      // more than bookkeeping does. Updates that send, settle or remove items
+      // still go through (settling adds a few fields), or a full outbox could
+      // never drain.
+      const grows = items.length > countBefore || bytes > bytesBefore + SETTLE_SLACK_BYTES;
+      if (bytes > this.maxBytes && grows) throw new OutboxTooLargeError(bytes, this.maxBytes);
       await this.backend.setItem(this.key, text);
       return value;
     });
