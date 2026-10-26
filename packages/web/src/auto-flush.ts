@@ -54,8 +54,11 @@ export function startAutoFlush<P>(outbox: Outbox<P>, options: AutoFlushOptions =
   const onVisible = () => {
     if (target.document?.visibilityState === "visible") scheduler.kick();
   };
+  // visibilitychange fires on document (it reaches window only by bubbling,
+  // which not every engine does), so listen there when there is one.
+  const visibilityTarget: EventTarget = (target.document as unknown as EventTarget | undefined)?.addEventListener ? (target.document as unknown as EventTarget) : target;
   target.addEventListener("online", onOnline);
-  target.addEventListener("visibilitychange", onVisible);
+  visibilityTarget.addEventListener("visibilitychange", onVisible);
   scheduler.kick();
 
   return {
@@ -63,7 +66,7 @@ export function startAutoFlush<P>(outbox: Outbox<P>, options: AutoFlushOptions =
     stop() {
       scheduler.stop();
       target.removeEventListener("online", onOnline);
-      target.removeEventListener("visibilitychange", onVisible);
+      visibilityTarget.removeEventListener("visibilitychange", onVisible);
     },
   };
 }

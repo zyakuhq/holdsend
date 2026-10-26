@@ -7,9 +7,9 @@
 ## What is in it
 
 - **`IndexedDbStore`**: the outbox kept in IndexedDB, so it survives closing the tab, a crash or a reload. Every change is one readwrite transaction, which IndexedDB runs one at a time across all tabs, so two tabs can never overwrite each other. If the browser closes the connection (iOS Safari does after backgrounding), the store reopens it.
-- **`createWebStore()`**: IndexedDB when it works, otherwise an in-memory store that reports `isDurable() === false`, so you can tell the person their draft only lasts while the tab is open.
+- **`createWebStore()`**: IndexedDB when it works (after one retry), otherwise an in-memory store that reports `isDurable() === false`, so you can tell the person their draft only lasts while the tab is open. Pass `onFallback` to log why. Two limits no page can detect: a private window usually reports `true` (its storage lasts until the window closes), and Safari may clear a site's storage after about a week without a visit.
 - **`SenderLock`**: one tab sends at a time (Web Locks, with a localStorage lease for older Safari). Correctness does not depend on it; it avoids sending the same request from two tabs.
-- **`startAutoFlush()`**: sends when the connection comes back or the tab becomes visible, and backs off while items keep failing.
+- **`startAutoFlush()`**: sends when the connection comes back or the tab becomes visible, and backs off while items keep failing. With more than one outbox on a page, give each its own lock: `startAutoFlush(outbox, { lock: new SenderLock({ name: "my-outbox-sender" }) })`.
 - **`requestBackgroundSync()` / `onBackgroundSync()`**: sending after the tab closes, where the browser supports it.
 
 ## Use it

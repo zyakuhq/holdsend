@@ -16,12 +16,17 @@ export type BackgroundSupport =
   /** Sends only while the app is open with a connection. Say so, and offer an alternative (SMS) for urgent messages. */
   | "open_app";
 
-interface SyncRegistrationLike {
-  sync?: { register(tag: string): Promise<void> };
+/**
+ * The part of navigator.serviceWorker this uses. Typed loosely so the real
+ * ServiceWorkerContainer fits; whether its registration supports Background
+ * Sync is checked at run time.
+ */
+export interface ServiceWorkerContainerLike {
+  ready: Promise<unknown>;
 }
 
-interface ServiceWorkerContainerLike {
-  ready: Promise<SyncRegistrationLike>;
+interface SyncRegistrationLike {
+  sync?: { register(tag: string): Promise<void> };
 }
 
 export interface BackgroundSyncOptions {
@@ -41,7 +46,7 @@ export async function requestBackgroundSync(options: BackgroundSyncOptions = {})
   if (!container) return "open_app";
   try {
     const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), options.timeoutMs ?? 3000));
-    const registration = await Promise.race([container.ready, timeout]);
+    const registration = (await Promise.race([container.ready, timeout])) as SyncRegistrationLike | null;
     if (!registration?.sync || typeof registration.sync.register !== "function") return "open_app";
     await registration.sync.register(tag);
     return "background";
@@ -50,13 +55,27 @@ export async function requestBackgroundSync(options: BackgroundSyncOptions = {})
   }
 }
 
-interface SyncEventLike {
+/** The part of a service worker's SyncEvent this uses. A plain `Event` from addEventListener is accepted too and checked at run time. */
+export interface SyncEventLike {
   tag: string;
   waitUntil(promise: Promise<unknown>): void;
 }
 
-/** True when a flush report says something is still waiting to be sent. */
-function workRemains(report: unknown): boolean {
+export interface OnBackgroundSyncOptions {
+  /** The sync tag to handle. Default "holdsend". */
+  tag?: string;
+}
+
+/**
+ * True when a flush result says something is still waiting to be sent. It
+ * may be a FlushReport, or a SenderLock run around one: a run that did not
+ * get the lock (`ran: false`) sent nothing, so work may remain.
+ */
+function workRemains(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const run = result as { ran?: unknown; value?: unknown };
+  if (run.ran === false) return true;
+  const report = run.ran === true ? run.value : result;
   if (!report || typeof report !== "object") return false;
   const r = report as { retry?: unknown; busy?: unknown; nextCheckInMs?: unknown };
   return (typeof r.retry === "number" && r.retry > 0) || (typeof r.busy === "number" && r.busy > 0) || typeof r.nextCheckInMs === "number";
@@ -80,10 +99,14 @@ function workRemains(report: unknown): boolean {
  *   // IndexedDB when the person signs in, and read it here.
  *   self.addEventListener("sync", (event) =>
  *     onBackgroundSync(event, async () => outbox.flush(await readSignedInOwner())));
+ *
+ * `flush` may also return a SenderLock run (`lock.run(() => outbox.flush(owner))`);
+ * a run that did not get the lock counts as work remaining.
  */
-export function onBackgroundSync(event: SyncEventLike, flush: () => Promise<unknown>, tag = "holdsend"): boolean {
-  if (event.tag !== tag) return false;
-  event.waitUntil(
+export function onBackgroundSync(event: SyncEventLike | Event, flush: () => Promise<unknown>, options: OnBackgroundSyncOptions = {}): boolean {
+  const sync = event as Partial<SyncEventLike>;
+  if (typeof sync.waitUntil !== "function" || sync.tag !== (options.tag ?? "holdsend")) return false;
+  sync.waitUntil(
     flush().then((report) => {
       if (workRemains(report)) throw new Error("items are still waiting to be sent; asking the browser to try again");
       return report;
