@@ -45,7 +45,7 @@ Last updated: 2026-10-26 (evening, third audit)
 ## Resolved
 
 - 2026-10-25: security@zyaku.com receives mail (confirmed by the project lead).
-- 2026-10-25: `zyakuhq/holdsend` created by the project lead; this automation has push access.
+- 2026-10-25: `zyakuhq/holdsend` created by the project lead.
 - 2026-10-25: private vulnerability reporting is enabled on the repository (confirmed by the project lead).
 - 2026-10-25: at the project lead's request, `main` was rewritten so every commit uses the noreply author address; file contents are unchanged. Old branches and pull-request refs still point at the earlier commits until they are deleted.
 
@@ -53,7 +53,7 @@ Last updated: 2026-10-26 (evening, third audit)
 
 - None.
 
-## Notes for the next session
+## Notes for maintainers
 
 - The never-twice soak at 3000 runs needs `--testTimeout=600000` (the default 30 s is too short for the slow-store case).
 - Never put Zyaku code, data, names or configuration in this repository. Write everything fresh; do not write reference code from memory either (see the audit's clean-room note). Run `npm run check` and gitleaks before every push.
