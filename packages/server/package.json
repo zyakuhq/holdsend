@@ -1,6 +1,6 @@
 {
   "name": "@holdsend/server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Server side of HoldSend: an idempotency store that records the key and the result in the same transaction as the write, replays the original answer for a repeated key, and refuses a different request under the same key.",
   "license": "Apache-2.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@holdsend/core": "0.1.0"
+    "@holdsend/core": "0.1.1"
   },
   "engines": {
     "node": ">=20"

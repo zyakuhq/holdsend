@@ -2,7 +2,9 @@
 
 The server half of [HoldSend](https://github.com/zyakuhq/holdsend). It turns a client's retries into one write.
 
-> Early: 0.1.0 is the first release. The API may change before 1.0, and it is not ready for production yet.
+> Early: 0.1 is the first release line. The API may change before 1.0, and it is not ready for production yet.
+
+ESM only. Load it with `import` on Node 20 or later, in browsers and in React Native. `require()` also works on Node 20.19 or later and 22.12 or later; on older Node, use `import()`.
 
 ## What it does
 
@@ -52,6 +54,13 @@ app.post("/api/posts", async (req, res) => {
 ```
 
 When a post is deleted, call `store.tombstoneResource(tx, { owner, operation: "post.create", resourceRef: postId })` inside the delete's transaction.
+
+## What exactly once depends on
+
+- **A key on every create.** Pass `requireKey: true` on every endpoint that creates something. Without it, a request that arrives with no `Idempotency-Key` runs `create` with no protection at all (outcome `"unkeyed"`). The default is `false` in 0.1 so existing clients keep working; a later version may make it `true`.
+- **Records kept as long as a client may retry.** `completedTtlMs` is unset by default, so completed records are kept until you erase them. If you set it, a record that expires before the client's last retry lets that retry create a second copy. Outbox items can wait a long time: a device can stay offline for weeks, and items older than `confirmAfterMs` (30 days by default) are still sent, with the same key, once the person approves them. Set `completedTtlMs` only if your clients are certain to give up sooner.
+- **The owner from the session.** Records are kept per owner and operation. Take the owner from the authenticated session, never from the request.
+- **Purging while a request runs.** `purgeExpired()` also removes claims older than `staleClaimMs`. A request whose claim was removed cannot commit: its write rolls back with `ClaimLostError`, and the client's retry gets the answer of the request that did commit. This is tested against a real Postgres server.
 
 ## Keeping it tidy and private
 

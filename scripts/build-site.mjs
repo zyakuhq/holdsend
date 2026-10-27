@@ -61,6 +61,7 @@ export const PAGES = [
     [
       ["First and second audits", "docs/audits/2026-10-25-first-independent-audit.md"],
       ["Third audit (before 0.1.0)", "docs/audits/2026-10-26-third-audit.md"],
+      ["Source review of 0.1.0", "docs/audits/2026-10-27-source-review.md"],
     ],
   ],
   [

@@ -2,7 +2,9 @@
 
 [HoldSend](https://github.com/zyakuhq/holdsend) for browsers.
 
-> Early: 0.1.0 is the first release. The API may change before 1.0, and it is not ready for production yet.
+> Early: 0.1 is the first release line. The API may change before 1.0, and it is not ready for production yet.
+
+ESM only. Load it with `import` on Node 20 or later, in browsers and in React Native. `require()` also works on Node 20.19 or later and 22.12 or later; on older Node, use `import()`.
 
 ## What is in it
 

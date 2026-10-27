@@ -4,7 +4,7 @@
 
 HoldSend is a small open-source library for apps where people write things that must not be lost: posts, reports, field notes, messages. It keeps what a person writes on the device while there is no connection, and publishes it once when the connection returns. Not zero times. Not twice. Even when answers get lost, someone taps twice, two tabs are open, or the app is killed halfway through a send.
 
-> **Status: early, first release (0.1.0).** The core, the server store, and the web and React Native stores are published on npm and tested, including a fault-injection suite and three independent audits (see [docs/audits](docs/audits)). The API may change before 1.0, the emergency module is not built, and nothing here is ready for production. This README will say so until it is. See [docs/STATUS.md](docs/STATUS.md).
+> **Status: early, first release line (0.1).** The core, the server store, and the web and React Native stores are published on npm and tested, including a fault-injection suite and three independent audits (see [docs/audits](docs/audits)). The API may change before 1.0, the emergency module is not built, and nothing here is ready for production. This README will say so until it is. See [docs/STATUS.md](docs/STATUS.md).
 
 Docs: https://zyakuhq.github.io/holdsend/
 
@@ -29,7 +29,7 @@ Networks fail at the worst moments: in a flood, at a protest, on a train, in a v
 
 | Package | What | State |
 | --- | --- | --- |
-| [`@holdsend/core`](packages/core) | Outbox state machine, keys, written-time rules, wire protocol, flush scheduler. No runtime dependencies. | 0.1.0 on npm |
+| [`@holdsend/core`](packages/core) | Outbox state machine, keys, written-time rules, wire protocol, flush scheduler. No runtime dependencies. | 0.1 on npm |
 | [`@holdsend/server`](packages/server) | Idempotency store for Postgres and memory, and a framework-agnostic request handler | 0.1.0 on npm |
 | [`@holdsend/web`](packages/web) | IndexedDB store, one sender across tabs, auto-flush, Background Sync helpers | 0.1.0 on npm |
 | [`@holdsend/react-native`](packages/react-native) | AsyncStorage and MMKV store, auto-flush wired to NetInfo and AppState | 0.1.0 on npm |
@@ -54,6 +54,8 @@ See [examples/notes](examples/notes) for what to try and where each part lives, 
 ```sh
 npm install @holdsend/core   # and @holdsend/server, @holdsend/web or @holdsend/react-native
 ```
+
+The packages are ESM and need Node 20 or later. `require()` works on Node 20.19 or later and 22.12 or later.
 
 ```ts
 import { MemoryStore, Outbox, classifyResponse } from "@holdsend/core";

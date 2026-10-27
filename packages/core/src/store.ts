@@ -7,6 +7,9 @@
  * stores that keep this promise (IndexedDB transactions plus a cross-tab lock
  * on the web, a serialised queue on React Native).
  *
+ * A store keeps its own copies: it must not hold on to the item objects it is
+ * given, or hand out objects it keeps, since callers may change them.
+ *
  * Items must survive app close, force-close and reload. A store that knows it
  * cannot promise that (memory only, blocked storage) must say so through
  * `isDurable`, so the app can warn the person before they close it. Some
@@ -28,7 +31,8 @@ export interface Store<P = unknown> {
   isDurable(): Promise<boolean>;
 }
 
-function clone<T>(value: T): T {
+/** A deep copy of a plain JSON value. */
+export function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
