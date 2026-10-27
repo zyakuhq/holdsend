@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-26 (night, 0.1.0 published)
+Last updated: 2026-10-27 (morning, 0.1.1 prepared)
 
 ## Done
 
@@ -20,18 +20,19 @@ Last updated: 2026-10-26 (night, 0.1.0 published)
 - Docs site at https://zyakuhq.github.io/holdsend/, built from the repository's Markdown by `scripts/build-site.mjs` and published by the Docs site workflow on every push to main. A test checks that every link on it works.
 - Expo example in [examples/expo](../examples/expo): the notes app on Android and iOS over `@holdsend/react-native` (AsyncStorage store, NetInfo and AppState auto-flush, `expo-crypto` keys). Its web build runs five browser scenarios in CI; the Android and iOS bundles build, but nothing runs on a device or emulator in CI yet. Reviewed independently; findings fixed.
 - Release preparation: all packages at 0.1.0 with publish metadata (public access, provenance, licence in each package), `scripts/check-packages.mjs` in `npm run check` (only build output, README and LICENSE may be published), CHANGELOG, issue and pull request templates, the Release workflow (tag `v*` publishes; manual runs can dry-run) and [releasing.md](releasing.md). The `@holdsend` npm organisation and the `NPM_TOKEN` secret exist (2026-10-26).
+- Independent source review of 0.1.0 (2026-10-27): six risks, HS-001 to HS-006. Two reproduced and fixed with tests (payload copy at `add()`, a real Postgres purge-during-request test), three documented as guarantee boundaries, one already handled by design ([audits/2026-10-27-source-review.md](audits/2026-10-27-source-review.md)).
 - Third independent audit before 0.1.0: 31 findings across core and server, web and React Native, and docs, examples and the release workflow. Every "before 0.1.0" item is fixed or decided, with regression tests ([audits/2026-10-26-third-audit.md](audits/2026-10-26-third-audit.md)).
 - **0.1.0 published to npm (2026-10-26)**: `@holdsend/core`, `@holdsend/server`, `@holdsend/web` and `@holdsend/react-native`, each with provenance, after the project lead's approval. The first attempt stopped because the token asked for a one-time password; a token that allows automation fixed it. Checked by installing all four in an empty project and loading each with import and require.
 - Example: a notes app (Express + Postgres or PGlite, plain browser page, service worker) in [examples/notes](../examples/notes), with browser tests in CI for airplane mode, a lost answer, two tabs, arrival ordering and the offline feed. Reviewed independently; the review's findings were fixed (background sync waits for a busy tab, the worker sends only the signed-in person's notes, keys are required, the outbox actions report what happened).
 
 ## In progress
 
-- Moving publishing to npm trusted publishing with staged publishing (2026-10-26). The workflow stages each package with no token; the project lead approves it on npmjs.com with 2FA. The trusted publisher on `@holdsend/core` is set up and pending validation, which needs one publish through it before 2026-10-28 16:07 UTC.
+- 0.1.1 (no API change): the fixes and docs from the 0.1.0 source review, docs on which Node versions can `require()` the packages, and a CI job that runs the built packages on Node 20.0.0. It is the first release through the npm trusted publishers, which validates them before npm's deadline (earliest: `@holdsend/core`, 2026-10-28 16:07 UTC). The project lead approves it in the `npm-release` environment, then each staged package on npmjs.com with 2FA, core first.
 
 ## Next three tasks
 
 1. Draft the October one-page report and a Show HN post for the project lead to review (kept out of the public repo).
-2. Release 0.1.1 through the trusted publishers before 2026-10-28 16:07 UTC, so npm validates them; confirm it works with no token.
+2. After 0.1.1: confirm each trusted publisher on npm no longer says "Pending validation".
 3. The emergency module (Phase 2).
 
 ## After that
@@ -42,7 +43,7 @@ Last updated: 2026-10-26 (night, 0.1.0 published)
 
 ## Blockers
 
-- The project lead adds the trusted publisher (stage only) to `server`, `web` and `react-native` on npm, sets publishing access to disallow tokens on all four, then deletes the `NPM_TOKEN` secret and the npm token.
+- 0.1.1 waits for the project lead's two approvals (GitHub, then npm with 2FA).
 
 ## Resolved
 

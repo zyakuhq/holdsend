@@ -7,7 +7,7 @@
  */
 import { newKey as defaultNewKey, isValidKey } from "./key.js";
 import { classifyThrown, requestHeaders, type RequestHeaderOptions } from "./protocol.js";
-import type { Store } from "./store.js";
+import { clone, type Store } from "./store.js";
 import { assertPlainJson } from "./json.js";
 import {
   approve as approveItem,
@@ -147,7 +147,8 @@ export class Outbox<P = unknown> {
     const item: OutboxItem<P> = {
       key: options.key ?? this.makeKey(),
       kind,
-      payload,
+      // A snapshot, so changing the object after add() cannot change what is sent.
+      payload: clone(payload),
       writtenAt,
       state: "waiting",
       attempts: 0,
@@ -160,7 +161,7 @@ export class Outbox<P = unknown> {
       items.push(item);
     });
     this.emit();
-    return { ...item };
+    return clone(item);
   }
 
   /** Every item not yet delivered, oldest written first, with what to show for it. */

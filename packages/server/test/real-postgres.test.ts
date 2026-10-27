@@ -67,4 +67,42 @@ describe.skipIf(!url)("real Postgres, many connections", () => {
     const count = await pool.query("SELECT count(*)::int AS n FROM posts WHERE owner = 'person-b'");
     expect(count.rows[0].n).toBe(0);
   });
+
+  it("keeps one post when purgeExpired removes a claim whose transaction is still running", async () => {
+    // Independent review HS-001: the first request is slow, its claim goes
+    // stale, a purge deletes it, and a retry claims the key afresh and
+    // commits. The first request must then fail to commit, not add a second post.
+    const id = { owner: "person-c", operation: "post.create", key: "purged-key-0001" };
+    const t0 = Date.now();
+    const first = await store.claim({ ...id, requestHash: "h", now: t0 });
+    if (first.type !== "claimed") throw new Error("expected claim");
+
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => (releaseFirst = resolve));
+    let firstInserted!: () => void;
+    const inserted = new Promise<void>((resolve) => (firstInserted = resolve));
+    const slow = store.transaction(async (tx) => {
+      await tx.query("INSERT INTO posts (owner, body) VALUES ($1, $2)", ["person-c", "slow first attempt"]);
+      firstInserted();
+      await gate;
+      await store.completeInTransaction(tx, { ...id, token: first.token, result: { status: 201, body: { by: "first" } } });
+    });
+    await inserted;
+
+    const later = t0 + 10 * 60 * 1000;
+    expect(await store.purgeExpired(later)).toBeGreaterThanOrEqual(1);
+    const retry = await store.claim({ ...id, requestHash: "h", now: later });
+    if (retry.type !== "claimed") throw new Error(`expected a fresh claim, got ${retry.type}`);
+    await store.transaction(async (tx) => {
+      await tx.query("INSERT INTO posts (owner, body) VALUES ($1, $2)", ["person-c", "retry"]);
+      await store.completeInTransaction(tx, { ...id, token: retry.token, result: { status: 201, body: { by: "retry" } } });
+    });
+
+    releaseFirst();
+    await expect(slow).rejects.toBeInstanceOf(ClaimLostError);
+    const posts = await pool.query("SELECT body FROM posts WHERE owner = 'person-c'");
+    expect(posts.rows.map((r) => r.body)).toEqual(["retry"]);
+    const again = await store.claim({ ...id, requestHash: "h", now: later + 1000 });
+    expect(again).toMatchObject({ type: "replay", result: { status: 201, body: { by: "retry" } } });
+  });
 });

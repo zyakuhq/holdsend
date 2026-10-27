@@ -2,6 +2,29 @@
 
 All notable changes to the `@holdsend` packages. All four packages share one version number.
 
+## 0.1.1 (2026-10-27)
+
+No API changes. Fixes and documentation from an independent source review of 0.1.0.
+
+### @holdsend/core
+
+- `add()` keeps its own copy of the payload, so changing the object afterwards cannot change what is sent, even with a custom store that keeps references. The `Store` contract now says stores must keep their own copies.
+
+### @holdsend/server
+
+- A new section, "What exactly once depends on": `requireKey: true` on every create, keeping records as long as clients may retry (and why `completedTtlMs` is risky), and the owner from the session.
+- A new test against a real Postgres server: when `purgeExpired()` removes the claim of a request that is still running, that request cannot commit, and only the retry's post exists.
+
+### @holdsend/react-native
+
+- The README says that store updates take turns within one JavaScript runtime only.
+
+### All packages
+
+- The READMEs say which Node versions can load the packages: `import` on Node 20 or later, `require()` on Node 20.19 or later and 22.12 or later. On older Node 20 releases `require()` fails with `ERR_REQUIRE_ESM`.
+- CI loads all four packages on Node 20.0.0, the oldest version they support, and checks that a write whose answer was lost is still published exactly once.
+- Releases are staged on npm and go live only after a maintainer approves them with two-factor authentication. They are published from GitHub Actions with trusted publishing and provenance, with no npm token.
+
 ## 0.1.0 (2026-10-26)
 
 The first release. Early: the API may still change before 1.0, and nothing here is ready for production yet.

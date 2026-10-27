@@ -1,6 +1,6 @@
 {
   "name": "@holdsend/react-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HoldSend for React Native: an outbox store over AsyncStorage or MMKV, and an auto-flush that you wire to NetInfo and AppState.",
   "license": "Apache-2.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@holdsend/core": "0.1.0"
+    "@holdsend/core": "0.1.1"
   },
   "publishConfig": {
     "access": "public",
