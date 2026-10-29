@@ -77,11 +77,17 @@ export interface AddOptions<P = unknown> {
   /** When the person wrote it. Defaults to now. */
   writtenAt?: number;
   /**
-   * Runs inside the store's atomic update, with the items not yet sent, so
-   * no other tab or sender can change the queue in between. Return one of
-   * those items to add nothing and get that item back (for example the same
+   * Ask a person before sending once it is this old (ms after writtenAt),
+   * even when a sender's policy allows longer. Stored on the item (askBy).
+   */
+  askAfterMs?: number;
+  /**
+   * Runs inside the store's atomic update, with copies of the items not yet
+   * sent, so no other tab or sender can change the queue in between. Return
+   * one of them to add nothing and get that item back (for example the same
    * message tapped twice), "hold" to add the new item held until a person
-   * approves it, or nothing to add it as usual.
+   * approves it, or nothing to add it as usual. Changing the copies has no
+   * effect.
    */
   decide?: (queued: readonly OutboxItem<P>[]) => OutboxItem<P> | "hold" | undefined;
 }
@@ -164,13 +170,18 @@ export class Outbox<P = unknown> {
       touched: options.key !== undefined,
     };
     if (options.owner !== undefined) item.owner = options.owner;
+    if (options.askAfterMs !== undefined) {
+      if (!(options.askAfterMs >= 0 && options.askAfterMs < Infinity)) throw new RangeError("askAfterMs must be finite, 0 or more");
+      item.askBy = writtenAt + options.askAfterMs;
+    }
     const existing = await this.store.update((items) => {
       if (items.some((i) => i.key === item.key)) throw new Error(`an item with key ${item.key} is already in the outbox`);
       const queued = items.filter((i) => i.state !== "sent");
-      const decided = options.decide?.(queued);
+      const decided = options.decide?.(clone(queued));
       if (decided !== undefined && decided !== "hold") {
-        if (!queued.includes(decided)) throw new Error("decide must return one of the queued items it was given");
-        return clone(decided);
+        const found = queued.find((i) => i.key === decided.key);
+        if (!found) throw new Error("decide must return a queued item");
+        return clone(found);
       }
       if (decided === "hold") item.held = true;
       items.push(item);

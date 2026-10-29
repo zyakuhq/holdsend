@@ -7,7 +7,8 @@
  *   import { EmergencyOutbox, smsLink } from "@holdsend/core/emergency";
  */
 import { Outbox, type OutboxOptions } from "./outbox.js";
-import type { OutboxItem, PolicyOptions } from "./types.js";
+import { statusOf } from "./transitions.js";
+import { resolvePolicy, type OutboxItem, type Policy, type PolicyOptions } from "./types.js";
 
 /** The payload of every emergency message. Text only. */
 export interface EmergencyMessage {
@@ -62,6 +63,7 @@ export class EmergencyOutbox {
   private readonly dedupeWithinMs: number;
   private readonly maxLength: number;
   private readonly now: () => number;
+  private readonly policy: Readonly<Policy>;
 
   constructor(options: EmergencyOutboxOptions) {
     const { autoSend = "first", dedupeWithinMs = 10 * 60 * 1000, maxLength = 1000, policy, ...rest } = options;
@@ -72,7 +74,8 @@ export class EmergencyOutbox {
     this.dedupeWithinMs = dedupeWithinMs;
     this.maxLength = maxLength;
     this.now = rest.now ?? Date.now;
-    this.outbox = new Outbox<EmergencyMessage>({ ...rest, policy: { ...policy, confirmAfterMs: policy?.confirmAfterMs ?? DAY } });
+    this.policy = resolvePolicy({ ...policy, confirmAfterMs: policy?.confirmAfterMs ?? DAY });
+    this.outbox = new Outbox<EmergencyMessage>({ ...rest, policy: this.policy });
   }
 
   /**
@@ -91,15 +94,22 @@ export class EmergencyOutbox {
     const item = await this.outbox.add(EMERGENCY_KIND, { text: trimmed }, {
       ...(options.owner !== undefined && { owner: options.owner }),
       writtenAt,
+      // Stored on the message, so a service worker's plain Outbox asks too.
+      askAfterMs: this.policy.confirmAfterMs,
       decide: (queued) => {
-        const mine = queued.filter((i) => i.kind === EMERGENCY_KIND && i.owner === options.owner);
+        const now = this.now();
+        // A stuck message waits for the person to retry or discard it; it is
+        // neither "the same message" nor a reason to hold a new one.
+        const mine = queued.filter(
+          (i) => i.kind === EMERGENCY_KIND && i.owner === options.owner && statusOf(i, now, this.policy) !== "stuck",
+        );
         const same =
           this.dedupeWithinMs > 0
             ? mine.find((i) => sameWords(i.payload.text) === words && Math.abs(i.writtenAt - writtenAt) <= this.dedupeWithinMs)
             : undefined;
         if (same) {
           duplicate = true;
-          held = same.held === true && same.approvedAt === undefined;
+          held = statusOf(same, now, this.policy) === "needs_confirmation";
           return same;
         }
         if (this.autoSend === "none" || (this.autoSend === "first" && mine.length > 0)) {
@@ -112,14 +122,16 @@ export class EmergencyOutbox {
     return { item, duplicate, held };
   }
 
-  /** The person pressed Send on one waiting message. */
+  /** The person pressed Send on one waiting message. Flush (or kick auto-flush) afterwards. */
   send(key: string) {
     return this.outbox.approve(key);
   }
 
   /**
    * The person pressed Send all: approves every message waiting for them,
-   * oldest first. Returns the keys approved, in order.
+   * oldest first, including any waiting because of their age, so show when
+   * each was written next to the button. Returns the keys approved, in order.
+   * Flush (or kick auto-flush) afterwards.
    */
   async sendAll(owner?: string): Promise<string[]> {
     const waiting = (await this.outbox.list()).filter(
@@ -137,8 +149,8 @@ export class EmergencyOutbox {
 export interface SmsLinkOptions {
   /**
    * iOS does not follow the sms: standard for several recipients, so they
-   * need a different link there. One recipient works the same everywhere.
-   * Default "other".
+   * need a different link there. Default "other". How phones read these
+   * links has changed between versions: test on the phones your people use.
    */
   platform?: "ios" | "other";
 }
@@ -154,7 +166,12 @@ export function smsLink(to: string | readonly string[], body: string, options: S
   if (numbers.length === 0 || numbers.some((n) => !/^\+?\d{2,15}$/.test(n))) {
     throw new TypeError("each number must be digits, optionally starting with +");
   }
-  const text = encodeURIComponent(body);
+  let text: string;
+  try {
+    text = encodeURIComponent(body);
+  } catch {
+    throw new TypeError("body must be valid text");
+  }
   if (numbers.length > 1 && options.platform === "ios") return `sms://open?addresses=${numbers.join(",")}&body=${text}`;
   return `sms:${numbers.join(",")}?body=${text}`;
 }

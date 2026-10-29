@@ -66,15 +66,21 @@ for (const { dir, pkg } of manifests) {
 // Every package can be loaded with import and with require (Jest and many
 // React Native test setups use require).
 for (const { dir, pkg } of manifests) {
+  // The main entry and every code subpath (such as @holdsend/core/emergency).
+  const entries = Object.keys(pkg.exports ?? { ".": null })
+    .filter((k) => k !== "./package.json")
+    .map((k) => pkg.name + k.slice(1));
   for (const [how, code] of [
-    ["import", `import(${JSON.stringify(pkg.name)}).then(() => {}, (e) => { console.error(e.message); process.exit(1); })`],
-    ["require", `require(${JSON.stringify(pkg.name)})`],
+    ...entries.flatMap((name) => [
+      [`import of ${name}`, `import(${JSON.stringify(name)}).then(() => {}, (e) => { console.error(e.message); process.exit(1); })`],
+      [`require of ${name}`, `require(${JSON.stringify(name)})`],
+    ]),
     ["require of package.json", `require(${JSON.stringify(pkg.name + "/package.json")})`],
   ]) {
     try {
       execFileSync(process.execPath, ["-e", code], { cwd: ROOT, stdio: "pipe" });
     } catch (err) {
-      problems.push(`packages/${dir}: cannot be loaded with ${how}: ${String(err.stderr ?? err).split("\n")[0]}`);
+      problems.push(`packages/${dir}: ${how} failed: ${String(err.stderr ?? err).split("\n")[0]}`);
     }
   }
 }
