@@ -38,6 +38,7 @@ export const PAGES = [
     "How it works",
     [
       ["Wire protocol", "docs/protocol.md"],
+      ["Emergency messages", "docs/emergency.md"],
       ["How it is tested", "docs/testing.md"],
       ["Design notes", "docs/reference-notes.md"],
       ["Status and roadmap", "docs/STATUS.md"],
@@ -54,6 +55,7 @@ export const PAGES = [
       ["0004 Server idempotency store", "docs/decisions/0004-server-idempotency-store.md"],
       ["0005 Web store and tabs", "docs/decisions/0005-web-store-and-tabs.md"],
       ["0006 React Native store", "docs/decisions/0006-react-native-store-and-scheduler.md"],
+      ["0007 Emergency messages", "docs/decisions/0007-emergency-messages.md"],
     ],
   ],
   [

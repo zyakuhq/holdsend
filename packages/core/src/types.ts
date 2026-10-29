@@ -69,8 +69,13 @@ export interface OutboxItem<P = unknown> {
   claimedAt?: number;
   /** Set while state is "sending": identifies the sender holding the claim. */
   claimToken?: string;
-  /** When a person approved sending an item older than the confirmation age. */
+  /** When a person approved sending an item that needed confirmation. */
   approvedAt?: number;
+  /**
+   * Held when it was added: never sent automatically, however recent, until a
+   * person approves it. See AddOptions.decide.
+   */
+  held?: true;
   stuckReason?: StuckReason;
   lastError?: ItemError;
   /** When the server confirmed it (epoch ms, device clock). */

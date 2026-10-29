@@ -23,10 +23,16 @@ const ALLOWED_IPS = [/^127\./, /^0\.0\.0\.0$/, /^192\.0\.2\./, /^198\.51\.100\./
 // Files that are generated or binary, or that by design hold the patterns.
 const SKIP = [/^package-lock\.json$/, /(^|\/)node_modules\//, /(^|\/)dist\//, /\.(png|jpe?g|gif|ico|woff2?|pdf)$/i, /^LICENSE$/];
 
+// North American numbers 555-0100 to 555-0199 are reserved for fiction and
+// can never belong to anyone, so tests and docs may use them.
+function fictionalPhone(match) {
+  return /^1?\d{3}55501\d{2}$/.test(match.replace(/\D/g, ""));
+}
+
 const RULES = [
   { name: "email", re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, allow: (m) => ALLOWED_EMAILS.has(m.toLowerCase()) || ALLOWED_EMAIL_DOMAINS.some((r) => r.test(m)) },
-  { name: "phone", re: /(?<![\w.:-])\+\d{1,3}[\s-]?\d[\d\s-]{6,14}\d(?![\w.:-])/g },
-  { name: "phone", re: /(?<![\w.:/-])\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?![\w.:-])/g },
+  { name: "phone", re: /(?<![\w.:-])\+\d{1,3}[\s-]?\d[\d\s-]{6,14}\d(?![\w.:-])/g, allow: (m) => fictionalPhone(m) },
+  { name: "phone", re: /(?<![\w.:/-])\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?![\w.:-])/g, allow: (m) => fictionalPhone(m) },
   { name: "ipv4", re: /(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/g, allow: (m) => ALLOWED_IPS.some((r) => r.test(m)) },
   { name: "private-host", re: /\b[a-z0-9-]+\.zyaku\.com\b/gi },
   { name: "private-path", re: /zyaku\.com\/(?:internal|admin|api|ops|staging)\b/gi },

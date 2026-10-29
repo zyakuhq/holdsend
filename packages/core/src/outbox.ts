@@ -64,7 +64,7 @@ export interface OutboxOptions<P> {
   headerOptions?: (item: OutboxItem<P>) => RequestHeaderOptions;
 }
 
-export interface AddOptions {
+export interface AddOptions<P = unknown> {
   /** Who wrote it. A flush for one owner never sends another owner's items. */
   owner?: string;
   /**
@@ -76,6 +76,14 @@ export interface AddOptions {
   key?: string;
   /** When the person wrote it. Defaults to now. */
   writtenAt?: number;
+  /**
+   * Runs inside the store's atomic update, with the items not yet sent, so
+   * no other tab or sender can change the queue in between. Return one of
+   * those items to add nothing and get that item back (for example the same
+   * message tapped twice), "hold" to add the new item held until a person
+   * approves it, or nothing to add it as usual.
+   */
+  decide?: (queued: readonly OutboxItem<P>[]) => OutboxItem<P> | "hold" | undefined;
 }
 
 export interface OutboxEntry<P> {
@@ -137,7 +145,7 @@ export class Outbox<P = unknown> {
   }
 
   /** Keeps something the person wrote. Resolves once it is stored. */
-  async add(kind: string, payload: P, options: AddOptions = {}): Promise<OutboxItem<P>> {
+  async add(kind: string, payload: P, options: AddOptions<P> = {}): Promise<OutboxItem<P>> {
     if (options.key !== undefined && !isValidKey(options.key)) {
       throw new TypeError("key must be 8 to 128 characters of letters, digits, '_', '-', ':' or '.'");
     }
@@ -156,10 +164,19 @@ export class Outbox<P = unknown> {
       touched: options.key !== undefined,
     };
     if (options.owner !== undefined) item.owner = options.owner;
-    await this.store.update((items) => {
+    const existing = await this.store.update((items) => {
       if (items.some((i) => i.key === item.key)) throw new Error(`an item with key ${item.key} is already in the outbox`);
+      const queued = items.filter((i) => i.state !== "sent");
+      const decided = options.decide?.(queued);
+      if (decided !== undefined && decided !== "hold") {
+        if (!queued.includes(decided)) throw new Error("decide must return one of the queued items it was given");
+        return clone(decided);
+      }
+      if (decided === "hold") item.held = true;
       items.push(item);
+      return undefined;
     });
+    if (existing) return existing;
     this.emit();
     return clone(item);
   }
