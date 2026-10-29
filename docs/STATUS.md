@@ -2,12 +2,14 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-29 (afternoon, emergency messages started)
+Last updated: 2026-10-29 (evening, emergency page in the notes example)
 
 ## Done
 
 - Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
 - Every package exports `./package.json` (2026-10-29, unreleased).
+- The notes example has an emergency page at `/emergency` (2026-10-29), with five browser tests: the first message goes by itself and later ones wait for Send all, repeated taps are one message, the SMS hand-off can be undone, and the page opens offline.
+- `npm run check` includes a secret scan with secretlint from npm, so no session needs to download gitleaks (CI still runs gitleaks on every pull request).
 - October report and Show HN post drafted for the project lead (2026-10-29), kept out of the public repo.
 - Reference design read and written up in our own words ([reference-notes.md](reference-notes.md)).
 - Name, licence, governance files, CI (lint, build, types, tests, size budgets, gitleaks, PII scan with hashed denylist, company-email check on PR commits, real Postgres race tests).
@@ -35,9 +37,9 @@ Last updated: 2026-10-29 (afternoon, emergency messages started)
 
 ## Next three tasks
 
-1. An emergency page in the notes example: its own store, sender lock and background sync tag, Send and Send all for held messages, the SMS hand-off, and the honest platform line. Browser tests for "first goes by itself, later ones wait", repeated taps, and a service worker that respects held messages.
-2. A server example for emergency messages (`handleIdempotent`, `requireKey: true`, records kept as long as a phone may retry), and a section in the protocol doc.
-3. The Phase 2 audit, then release 0.2.0 (with the `./package.json` export).
+1. A section on emergency messages in docs/protocol.md (the server route in the notes example is the reference: `handleIdempotent`, `requireKey: true`, records kept as long as a phone may retry).
+2. The Phase 2 audit by separate reviewers (core emergency code, the example page and service worker, the docs), and fixes.
+3. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
 
 ## After that
 
@@ -47,7 +49,7 @@ Last updated: 2026-10-29 (afternoon, emergency messages started)
 ## Blockers
 
 - The Show HN post waits for the project lead's yes.
-- The nightly engineering run on 27 and 28 October finished in about two minutes with no pull request and no email. The likely cause is that it could not attach the repository with push access. The project lead is checking that run's last message.
+- The nightly engineering run on 27 and 28 October stopped because it could not download gitleaks. Fixed on 2026-10-29: `npm run check` now runs secretlint, and the task's prompt allows that.
 
 ## Resolved
 
