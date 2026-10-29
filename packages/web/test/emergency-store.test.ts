@@ -32,10 +32,8 @@ describe("emergency messages in IndexedDB", () => {
     });
     expect(await worker.flush("p1")).toMatchObject({ sent: 0 });
     expect(sent).toEqual([]);
-    const items = (await worker.list()).map((e) => e.item);
-    expect(items.map((i) => [i.held === true, i.askBy])).toEqual([
-      [false, T0 + DAY],
-      [true, T0 + DAY],
-    ]);
+    // Both were written at the same instant, so compare by text, not order.
+    const byText = Object.fromEntries((await worker.list()).map((e) => [e.item.payload.text, [e.item.held === true, e.item.askBy]]));
+    expect(byText).toEqual({ First: [false, T0 + DAY], Second: [true, T0 + DAY] });
   });
 });
