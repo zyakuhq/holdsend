@@ -233,6 +233,7 @@ describe("emergency messages in a key-value store", () => {
     t += 2 * 24 * 60 * 60 * 1000;
     const other = new Outbox<EmergencyMessage>({ store: new KeyValueStore<EmergencyMessage>(storage, { key: "test:emergency" }), now: () => t, policy: { claimRenewMs: 0 }, send: async () => ({ type: "sent" }) });
     expect(await other.flush("p1")).toMatchObject({ sent: 0 });
-    expect((await other.list()).map((e) => e.item.held === true)).toEqual([false, true]);
+    const byText = Object.fromEntries((await other.list()).map((e) => [e.item.payload.text, e.item.held === true]));
+    expect(byText).toEqual({ First: false, Second: true });
   });
 });
