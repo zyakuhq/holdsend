@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HoldSend emergency messages example</title>
+    <style>
+      :root {
+        --bg: #f7f6f2;
+        --card: #ffffff;
+        --text: #1d1d1b;
+        --muted: #5f5e58;
+        --line: #dedcd3;
+        --accent: #1f5f8b;
+        --warn: #8a4b00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161614;
+          --card: #1f1f1c;
+          --text: #ecebe6;
+          --muted: #a6a59d;
+          --line: #34332e;
+          --accent: #7db7e0;
+          --warn: #e6a457;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+      main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+      p { margin: 0 0 8px; }
+      .lead, .meta, .hint { color: var(--muted); }
+      .meta, .hint { font-size: 0.875rem; }
+      .disclaimer { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+      #connection { font-weight: 600; }
+      #connection[data-online="false"], #notice { color: var(--warn); }
+      form { display: grid; gap: 8px; margin-top: 16px; }
+      label { font-weight: 600; }
+      textarea, input { width: 100%; padding: 10px; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+      textarea { min-height: 80px; }
+      button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; margin: 4px 6px 0 0; }
+      button[type="submit"], #send-all { background: var(--accent); color: var(--bg); border-color: var(--accent); justify-self: start; }
+      ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+      li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+      .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+      #sms-handoff { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
+      #sms-link { font-weight: 600; color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Emergency messages</h1>
+      <p class="disclaimer">A demo of HoldSend's emergency queue. It is not an emergency service and contacts no one. In an emergency, call your local emergency number first.</p>
+      <p class="lead">Write a short message with or without a connection. The first message is sent by itself when the connection returns. Later ones wait until you press Send, so a stale message is never sent by surprise.</p>
+      <p id="connection" role="status"></p>
+      <p id="background" class="hint"></p>
+
+      <form id="compose">
+        <label for="text">Message</label>
+        <textarea id="text" maxlength="1000" required></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+
+      <p id="notice" role="status"></p>
+
+      <h2>Waiting on this device</h2>
+      <p id="outbox-empty" class="hint">Nothing waiting.</p>
+      <button type="button" id="send-all" hidden>Send all waiting messages</button>
+      <ul id="outbox"></ul>
+
+      <label for="sms-number">Phone number for an SMS hand-off (optional)</label>
+      <input id="sms-number" type="tel" autocomplete="off" placeholder="+1 415 555 0199" />
+      <p class="hint">"Send by SMS" opens your messaging app with the text filled in. You still press send there, and it needs phone signal.</p>
+      <div id="sms-handoff" hidden>
+        <p id="sms-note"></p>
+        <p><a id="sms-link" href="#">Open your messaging app</a></p>
+        <button type="button" id="sms-undo">Put it back in the queue</button>
+      </div>
+
+      <h2>Received by the server</h2>
+      <p id="received-note" class="hint"></p>
+      <ul id="received"></ul>
+
+      <p class="hint"><a href="/">Back to notes</a></p>
+    </main>
+    <script type="module" src="/emergency.js"></script>
+  </body>
+</html>

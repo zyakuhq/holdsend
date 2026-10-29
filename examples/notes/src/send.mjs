@@ -16,3 +16,20 @@ export async function sendNote(item, { headers, signal }) {
   const body = await res.json().catch(() => ({}));
   return classifyResponse(res.status, body.code, body.message);
 }
+
+/** The emergency queue: its own database, sender lock and background sync tag. */
+export const EMERGENCY_NAME = `${OUTBOX_NAME}-emergency`;
+export const EMERGENCY_LOCK = `${EMERGENCY_NAME}-sender`;
+export const EMERGENCY_TAG = "holdsend-emergency";
+
+/** Posts one emergency message, with the same headers as a note. */
+export async function sendEmergency(item, { headers, signal }) {
+  const res = await fetch("/api/emergency-messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers, "x-demo-user": item.owner },
+    body: JSON.stringify(item.payload),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  return classifyResponse(res.status, body.code, body.message);
+}

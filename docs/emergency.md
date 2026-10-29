@@ -4,7 +4,7 @@
 
 `@holdsend/core/emergency` helps a short text message get out of a phone that has no signal, once, without misleading the person who wrote it. It is a delivery aid, not an emergency service. It does not contact emergency services. Any app that uses it must keep telling people to call their local emergency number first.
 
-Why these rules: [decision 0007](decisions/0007-emergency-messages.md).
+Why these rules: [decision 0007](decisions/0007-emergency-messages.md). To try it, run the notes example and open `/emergency` ([examples/notes](../examples/notes)).
 
 ## What it does
 

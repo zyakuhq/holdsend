@@ -20,10 +20,19 @@ CREATE TABLE IF NOT EXISTS notes (
   arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS notes_owner_arrived_idx ON notes (owner, arrived_at DESC);
+CREATE TABLE IF NOT EXISTS emergency_messages (
+  id         BIGSERIAL PRIMARY KEY,
+  owner      TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  written_at TIMESTAMPTZ,
+  arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS emergency_owner_arrived_idx ON emergency_messages (owner, arrived_at DESC);
 `;
 
 const DEMO_USER = /^[A-Za-z0-9-]{8,64}$/;
 const MAX_NOTE = 2000;
+const MAX_EMERGENCY = 1000;
 
 async function openDatabase(databaseUrl) {
   if (databaseUrl) {
@@ -58,8 +67,12 @@ async function bundleClient(pageEntry, development) {
     });
     return result.outputFiles[0].text;
   };
-  const [app, sw] = await Promise.all([bundle(pageEntry, "esm"), bundle(here("./sw.mjs"), "iife")]);
-  return { "app.js": app, "sw.js": sw };
+  const [app, emergency, sw] = await Promise.all([
+    bundle(pageEntry, "esm"),
+    bundle(here("./emergency-client.mjs"), "esm"),
+    bundle(here("./sw.mjs"), "iife"),
+  ]);
+  return { "app.js": app, "emergency.js": emergency, "sw.js": sw };
 }
 
 function noteJson(row) {
@@ -79,9 +92,13 @@ export async function createNotesApp(options = {}) {
   // options.staticDir serves an app that was built elsewhere (the Expo web
   // export); otherwise the page is bundled here.
   const pageFiles = options.page ?? { entry: here("./client.mjs"), html: here("../public/index.html") };
-  const [client, indexHtml] = options.staticDir
-    ? [null, null]
-    : await Promise.all([bundleClient(pageFiles.entry, options.development === true), readFile(pageFiles.html, "utf8")]);
+  const [client, indexHtml, emergencyHtml] = options.staticDir
+    ? [null, null, null]
+    : await Promise.all([
+        bundleClient(pageFiles.entry, options.development === true),
+        readFile(pageFiles.html, "utf8"),
+        readFile(here("../public/emergency.html"), "utf8"),
+      ]);
   // Owners who asked to lose the answer to their next note (the demo button).
   const loseNextAnswer = new Set();
   // For tests: how many answers were really dropped.
@@ -99,6 +116,8 @@ export async function createNotesApp(options = {}) {
   } else {
     app.get("/", page("text/html; charset=utf-8", indexHtml));
     app.get("/app.js", page("text/javascript; charset=utf-8", client["app.js"]));
+    app.get("/emergency", page("text/html; charset=utf-8", emergencyHtml));
+    app.get("/emergency.js", page("text/javascript; charset=utf-8", client["emergency.js"]));
     app.get("/sw.js", page("text/javascript; charset=utf-8", client["sw.js"]));
   }
 
@@ -169,6 +188,42 @@ export async function createNotesApp(options = {}) {
     });
     if (!deleted) return res.status(404).json({ code: "not_found", message: "No such note." });
     res.status(204).end();
+  });
+
+  // Emergency messages: the same rules as notes, in their own table. The
+  // records are kept as long as the notes' records (forever here), because a
+  // phone may retry a message long after it was written.
+  app.get("/api/emergency-messages", async (_req, res) => {
+    const { rows } = await database.db.query(
+      "SELECT id, text, written_at, arrived_at FROM emergency_messages WHERE owner = $1 ORDER BY arrived_at DESC, id DESC LIMIT 100",
+      [res.locals.owner],
+    );
+    res.set("cache-control", "no-store").json({ messages: rows.map(noteJson) });
+  });
+
+  app.post("/api/emergency-messages", async (req, res) => {
+    const owner = res.locals.owner;
+    const text = req.body?.text;
+    if (typeof text !== "string" || text.trim() === "" || text.length > MAX_EMERGENCY) {
+      return res.status(400).json({ code: "invalid_message", message: `A message is 1 to ${MAX_EMERGENCY} characters.` });
+    }
+    const answer = await handleIdempotent({
+      store,
+      owner,
+      operation: "emergency.create",
+      headers: req.headers,
+      content: { text },
+      requireKey: true,
+      create: async (tx, { writtenAt }) => {
+        const { rows } = await tx.query("INSERT INTO emergency_messages (owner, text, written_at) VALUES ($1, $2, $3) RETURNING id", [
+          owner,
+          text,
+          writtenAt === null ? null : new Date(writtenAt),
+        ]);
+        return { status: 201, body: { id: String(rows[0].id) }, resourceRef: String(rows[0].id) };
+      },
+    });
+    res.status(answer.status).set(answer.headers).json(answer.body);
   });
 
   app.post("/api/demo/lose-next-answer", (_req, res) => {

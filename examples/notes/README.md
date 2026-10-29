@@ -30,6 +30,8 @@ Open http://localhost:3000. It uses PGlite (Postgres in WebAssembly, in memory) 
 | [`src/send.mjs`](src/send.mjs) | How one note is sent. The outbox adds `Idempotency-Key` and `Written-At`. |
 | [`src/sw.mjs`](src/sw.mjs) | The service worker. Keeps the page available offline and sends in the background where the browser supports Background Sync. |
 | [`src/session.mjs`](src/session.mjs) | Tells the service worker who is signed in, so it only ever sends that person's notes. |
+| [`src/emergency-client.mjs`](src/emergency-client.mjs) and [`public/emergency.html`](public/emergency.html) | The emergency page at `/emergency`: its own queue, sender lock and background sync tag. The first message goes by itself, later ones wait for Send or Send all, repeated taps are one message, and there's an SMS hand-off that takes the message out of the queue (and can put it back). A demo, not an emergency service. |
+| [`test/emergency.mjs`](test/emergency.mjs) | The emergency page's browser checks, against the server's own list of messages. |
 | [`test/scenarios.mjs`](test/scenarios.mjs) | The checks above, run in Chromium on every pull request against this page and the [React version](../react). They count the server's notes, not what the page shows. |
 
 ## Demo shortcuts
