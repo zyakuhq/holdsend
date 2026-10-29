@@ -2,10 +2,13 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-27 (morning, 0.1.1 published)
+Last updated: 2026-10-29 (afternoon, emergency messages started)
 
 ## Done
 
+- Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
+- Every package exports `./package.json` (2026-10-29, unreleased).
+- October report and Show HN post drafted for the project lead (2026-10-29), kept out of the public repo.
 - Reference design read and written up in our own words ([reference-notes.md](reference-notes.md)).
 - Name, licence, governance files, CI (lint, build, types, tests, size budgets, gitleaks, PII scan with hashed denylist, company-email check on PR commits, real Postgres race tests).
 - `@holdsend/core`: outbox rules, `Outbox` runtime with attempt timeouts and abort signals, keys, written-time bounds, protocol, JSON payload checks, flush scheduler.
@@ -28,23 +31,23 @@ Last updated: 2026-10-27 (morning, 0.1.1 published)
 
 ## In progress
 
-- Nothing open.
+- Phase 2, the emergency module (v0.2). The library part is merged. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
 ## Next three tasks
 
-1. Draft the October one-page report and a Show HN post for the project lead to review (kept out of the public repo).
-2. Export `./package.json` from each package (some tools read it), in the next small release.
-3. The emergency module (Phase 2).
+1. An emergency page in the notes example: its own store, sender lock and background sync tag, Send and Send all for held messages, the SMS hand-off, and the honest platform line. Browser tests for "first goes by itself, later ones wait", repeated taps, and a service worker that respects held messages.
+2. A server example for emergency messages (`handleIdempotent`, `requireKey: true`, records kept as long as a phone may retry), and a section in the protocol doc.
+3. The Phase 2 audit, then release 0.2.0 (with the `./package.json` export).
 
 ## After that
 
-- Emergency module: dedupe, written time, background sending where possible, SMS hand-off, honest platform limits.
 - Conflict handling for one draft edited on two devices (append-only updates with a reason). This is the hard part; say so.
 - An Android background task for React Native.
 
 ## Blockers
 
-- None.
+- The Show HN post waits for the project lead's yes.
+- The nightly engineering run on 27 and 28 October finished in about two minutes with no pull request and no email. The likely cause is that it could not attach the repository with push access. The project lead is checking that run's last message.
 
 ## Resolved
 
