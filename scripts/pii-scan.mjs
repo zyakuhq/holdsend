@@ -25,8 +25,10 @@ const SKIP = [/^package-lock\.json$/, /(^|\/)node_modules\//, /(^|\/)dist\//, /\
 
 // North American numbers 555-0100 to 555-0199 are reserved for fiction and
 // can never belong to anyone, so tests and docs may use them.
+// Only North American numbers (+1, or ten digits with no country code).
 function fictionalPhone(match) {
-  return /^1?\d{3}55501\d{2}$/.test(match.replace(/\D/g, ""));
+  const digits = match.replace(/\D/g, "");
+  return match.trim().startsWith("+") ? /^1\d{3}55501\d{2}$/.test(digits) : /^\d{3}55501\d{2}$/.test(digits);
 }
 
 const RULES = [

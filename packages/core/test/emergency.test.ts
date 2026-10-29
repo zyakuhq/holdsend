@@ -51,8 +51,34 @@ describe("add() with decide", () => {
   it("refuses an item that is not one of the queued ones", async () => {
     const outbox = new Outbox<{ n: number }>({ store: new MemoryStore(), send: async () => ({ type: "sent" }) });
     const stranger = { key: "not-queued-0001", kind: "k", payload: { n: 0 }, writtenAt: T0, state: "waiting", attempts: 0, touched: false } as OutboxItem<{ n: number }>;
-    await expect(outbox.add("k", { n: 1 }, { decide: () => stranger })).rejects.toThrow(/queued items/);
+    await expect(outbox.add("k", { n: 1 }, { decide: () => stranger })).rejects.toThrow(/queued item/);
     expect(await outbox.list()).toHaveLength(0);
+  });
+
+  it("gives decide copies, so changing them changes nothing", async () => {
+    const outbox = new Outbox<{ n: number }>({ store: new MemoryStore(), now: () => T0, send: async () => ({ type: "sent" }) });
+    await outbox.add("k", { n: 1 }, { decide: () => "hold" });
+    await outbox.add("k", { n: 2 }, {
+      decide: (queued) => {
+        const q = queued[0] as OutboxItem<{ n: number }>;
+        q.state = "sent";
+        q.approvedAt = T0;
+        delete q.held;
+        return undefined;
+      },
+    });
+    expect((await outbox.list()).map((e) => e.status)).toEqual(["needs_confirmation", "waiting"]);
+  });
+
+  it("stores askAfterMs on the item, so every sender asks after that age", async () => {
+    let t = T0;
+    const outbox = new Outbox<{ n: number }>({ store: new MemoryStore(), now: () => t, send: async () => ({ type: "sent" }) });
+    const item = await outbox.add("k", { n: 1 }, { askAfterMs: HOUR });
+    expect(item.askBy).toBe(T0 + HOUR);
+    t += HOUR + 1;
+    expect((await outbox.list())[0]?.status).toBe("needs_confirmation");
+    await expect(outbox.add("k", { n: 2 }, { askAfterMs: -1 })).rejects.toThrow(RangeError);
+    await expect(outbox.add("k", { n: 2 }, { askAfterMs: Infinity })).rejects.toThrow(RangeError);
   });
 
   it("is not shown delivered items", async () => {
@@ -127,13 +153,68 @@ describe("EmergencyOutbox: which messages go by themselves", () => {
   });
 
   it("asks before sending even the first message once it is a day old", async () => {
-    const { emergency, clock, sentTexts } = setup({ isOnline: () => false });
+    const { emergency, clock, sentTexts } = setup();
     const first = await emergency.write("Stuck at the station", { owner: "p1" });
     clock.t += DAY + MIN;
     const [entry] = await emergency.outbox.list();
     expect(entry?.status).toBe("needs_confirmation");
-    expect(await emergency.send(first.item.key)).toMatchObject({ ok: true });
+    expect(await emergency.outbox.flush()).toMatchObject({ sent: 0 });
     expect(sentTexts()).toEqual([]);
+    expect(await emergency.send(first.item.key)).toMatchObject({ ok: true });
+    await emergency.outbox.flush();
+    expect(sentTexts()).toEqual(["Stuck at the station"]);
+  });
+
+  it("keeps its rules when a plain Outbox sends from the same store (a service worker)", async () => {
+    const { emergency, clock, store, server, sentTexts } = setup();
+    await emergency.write("Written two days ago", { owner: "p1" });
+    await emergency.write("Held second message", { owner: "p1" });
+    clock.t += 2 * DAY;
+    const worker = new Outbox<EmergencyMessage>({ store, send: server.sender(), now: () => clock.t, policy: { claimRenewMs: 0 } });
+    expect(await worker.flush("p1")).toMatchObject({ sent: 0 });
+    expect(sentTexts()).toEqual([]);
+    expect((await worker.list()).map((e) => e.status)).toEqual(["needs_confirmation", "needs_confirmation"]);
+  });
+
+  it("does not let a stuck message swallow new taps or hold later messages", async () => {
+    const clock = { t: T0 };
+    let refuse = true;
+    const server = new FakeServer();
+    const send = server.sender();
+    const emergency = new EmergencyOutbox({
+      store: new MemoryStore(),
+      now: () => clock.t,
+      policy: { claimRenewMs: 0 },
+      send: async (item, ctx) => (refuse ? { type: "refused" } : send(item, ctx)),
+    });
+    const refused = await emergency.write("Need help", { owner: "p1" });
+    await emergency.outbox.flush();
+    expect((await emergency.outbox.list())[0]?.status).toBe("stuck");
+    refuse = false;
+    const again = await emergency.write("need help", { owner: "p1" });
+    expect(again).toMatchObject({ duplicate: false, held: false });
+    expect(again.item.key).not.toBe(refused.item.key);
+    expect((await emergency.write("Different words", { owner: "p1" })).held).toBe(true);
+    await emergency.outbox.flush();
+    expect(server.created.map((c) => (JSON.parse(c.body) as EmergencyMessage).text)).toEqual(["need help"]);
+  });
+
+  it("Send all keeps people apart, including messages with no owner", async () => {
+    const { emergency } = setup({ autoSend: "none" });
+    const anon = await emergency.write("No owner");
+    const p1 = await emergency.write("Owner one", { owner: "p1" });
+    expect(await emergency.sendAll()).toEqual([anon.item.key]);
+    expect(await emergency.sendAll("p1")).toEqual([p1.item.key]);
+  });
+
+  it("held messages: retry refuses them, cancel and discard work while they never left", async () => {
+    const { emergency } = setup({ autoSend: "none" });
+    const a = await emergency.write("A", { owner: "p1" });
+    const b = await emergency.write("B", { owner: "p1" });
+    expect(await emergency.outbox.retry(a.item.key)).toEqual({ ok: false, reason: "not_stuck" });
+    expect(await emergency.outbox.cancel(a.item.key)).toBe("cancelled");
+    expect(await emergency.outbox.discard(b.item.key)).toBeDefined();
+    expect(await emergency.outbox.list()).toEqual([]);
   });
 
   it("keeps the one-day default when the app passes confirmAfterMs: undefined", async () => {
@@ -167,6 +248,13 @@ describe("EmergencyOutbox: repeated taps", () => {
     await delivered.emergency.outbox.flush();
     const again = await delivered.emergency.write("Help", { owner: "p1" });
     expect(again).toMatchObject({ duplicate: false, held: false });
+  });
+
+  it("reports a duplicate of a message waiting because of its age as held", async () => {
+    const { emergency, clock } = setup({ dedupeWithinMs: 2 * DAY });
+    await emergency.write("Old one", { owner: "p1" });
+    clock.t += DAY + MIN;
+    expect(await emergency.write("old one", { owner: "p1" })).toMatchObject({ duplicate: true, held: true });
   });
 
   it("reports a held duplicate as held", async () => {
@@ -254,5 +342,6 @@ describe("smsLink", () => {
     expect(() => smsLink("call me", "x")).toThrow(TypeError);
     expect(() => smsLink([], "x")).toThrow(TypeError);
     expect(() => smsLink("+1555?body=evil", "x")).toThrow(TypeError);
+    expect(() => smsLink("+14155550199", "broken \ud800 text")).toThrow(TypeError);
   });
 });

@@ -58,7 +58,7 @@ function forOwner(item: OutboxItem, owner: string | undefined): boolean {
  */
 export function needsConfirmation(item: OutboxItem, now: number, policy: Policy = DEFAULT_POLICY): boolean {
   if (item.state === "sent" || item.approvedAt !== undefined) return false;
-  if (!item.held && !(now - item.writtenAt > policy.confirmAfterMs)) return false;
+  if (!item.held && !(now - item.writtenAt > policy.confirmAfterMs) && !(now > (item.askBy ?? Infinity))) return false;
   // Being sent right now is not "waiting for a person": it is being sent.
   return !isClaimLive(item, now, policy);
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Outbox } from "@holdsend/core";
 import { CorruptOutboxError, KeyValueStore, fromMmkv, startNativeAutoFlush, type AsyncKeyValue, type MmkvLike } from "../src/index.js";
 import { FakeServer } from "../../core/test/fake-server.js";
+import { EmergencyOutbox, type EmergencyMessage } from "@holdsend/core/emergency";
 
 type Payload = { text: string };
 
@@ -218,5 +219,20 @@ describe("third audit B8: a corrupt outbox", () => {
     expect((err as InstanceType<typeof CorruptOutboxError>).raw).toContain("private words");
     expect(JSON.stringify(err)).not.toContain("private words");
     expect(Object.keys(err as object)).not.toContain("raw");
+  });
+});
+
+describe("emergency messages in a key-value store", () => {
+  it("keep held and ask-by across a fresh store and Outbox", async () => {
+    const storage = fakeAsyncStorage();
+    const t0 = Date.parse("2026-10-29T12:00:00Z");
+    let t = t0;
+    const page = new EmergencyOutbox({ store: new KeyValueStore<EmergencyMessage>(storage, { key: "test:emergency" }), now: () => t, send: async () => ({ type: "sent" }) });
+    await page.write("First", { owner: "p1" });
+    await page.write("Second", { owner: "p1" });
+    t += 2 * 24 * 60 * 60 * 1000;
+    const other = new Outbox<EmergencyMessage>({ store: new KeyValueStore<EmergencyMessage>(storage, { key: "test:emergency" }), now: () => t, policy: { claimRenewMs: 0 }, send: async () => ({ type: "sent" }) });
+    expect(await other.flush("p1")).toMatchObject({ sent: 0 });
+    expect((await other.list()).map((e) => e.item.held === true)).toEqual([false, true]);
   });
 });

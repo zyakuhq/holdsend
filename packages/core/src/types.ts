@@ -76,6 +76,12 @@ export interface OutboxItem<P = unknown> {
    * person approves it. See AddOptions.decide.
    */
   held?: true;
+  /**
+   * After this time (epoch ms) it is not sent automatically until a person
+   * approves it, whatever the sending outbox's policy says. Set from
+   * AddOptions.askAfterMs, so the rule travels with the item to every sender.
+   */
+  askBy?: number;
   stuckReason?: StuckReason;
   lastError?: ItemError;
   /** When the server confirmed it (epoch ms, device clock). */

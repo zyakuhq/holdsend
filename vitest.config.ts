@@ -1,17 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-const src = (pkg: string) => fileURLToPath(new URL(`./packages/${pkg}/src/index.ts`, import.meta.url));
+const src = (pkg: string, file = "index") => fileURLToPath(new URL(`./packages/${pkg}/src/${file}.ts`, import.meta.url));
 
 export default defineConfig({
   resolve: {
     // Tests run against the source of every package, so no build is needed first.
-    alias: {
-      "@holdsend/core": src("core"),
-      "@holdsend/server": src("server"),
-      "@holdsend/web": src("web"),
-      "@holdsend/react-native": src("react-native"),
-    },
+    alias: [
+      { find: /^@holdsend\/core\/emergency$/, replacement: src("core", "emergency") },
+      { find: /^@holdsend\/core$/, replacement: src("core") },
+      { find: /^@holdsend\/server$/, replacement: src("server") },
+      { find: /^@holdsend\/web$/, replacement: src("web") },
+      { find: /^@holdsend\/react-native$/, replacement: src("react-native") },
+    ],
   },
   test: {
     include: ["packages/*/test/**/*.test.ts", "test/**/*.test.ts"],
