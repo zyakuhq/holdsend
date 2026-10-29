@@ -83,10 +83,14 @@ const actions = {
     } catch {
       return "Enter a phone number for the SMS first.";
     }
+    // smsLink only returns sms: links (digits and encoded text). Check it and
+    // set it on a fixed prefix anyway, so this page can never set another scheme.
+    if (!link.startsWith("sms:")) return "Could not build the SMS link.";
+    const href = "sms:" + link.slice("sms:".length);
     // Take it out of the queue first, so it cannot also arrive by data.
     const result = await outbox.cancel(item.key);
     handedOff = result === "cancelled" ? { text: item.payload.text, writtenAt: item.writtenAt } : null;
-    $("sms-link").href = link;
+    $("sms-link").setAttribute("href", href);
     $("sms-note").textContent =
       result === "cancelled"
         ? "Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back."
