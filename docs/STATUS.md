@@ -2,13 +2,14 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-29 (evening, emergency page in the notes example)
+Last updated: 2026-10-29 (night, emergency server rules in the protocol docs)
 
 ## Done
 
 - Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
 - Every package exports `./package.json` (2026-10-29, unreleased).
 - The notes example has an emergency page at `/emergency` (2026-10-29), with five browser tests: the first message goes by itself and later ones wait for Send all, repeated taps are one message, the SMS hand-off can be undone, and the page opens offline.
+- docs/protocol.md has a section on emergency messages: require the key, keep records as long as a phone may retry, keep written time apart from arrival time (2026-10-29).
 - `npm run check` includes a secret scan with secretlint from npm, so no session needs to download gitleaks (CI still runs gitleaks on every pull request).
 - October report and Show HN post drafted for the project lead (2026-10-29), kept out of the public repo.
 - Reference design read and written up in our own words ([reference-notes.md](reference-notes.md)).
@@ -35,11 +36,10 @@ Last updated: 2026-10-29 (evening, emergency page in the notes example)
 
 - Phase 2, the emergency module (v0.2). The library part is merged. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
-## Next three tasks
+## Next tasks
 
-1. A section on emergency messages in docs/protocol.md (the server route in the notes example is the reference: `handleIdempotent`, `requireKey: true`, records kept as long as a phone may retry).
-2. The Phase 2 audit by separate reviewers (core emergency code, the example page and service worker, the docs), and fixes.
-3. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
+1. The Phase 2 audit by separate reviewers (core emergency code, the example page and service worker, the docs), and fixes.
+2. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
 
 ## After that
 
