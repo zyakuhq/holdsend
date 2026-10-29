@@ -6,8 +6,9 @@ set -e
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks git --redact --no-banner --exit-code 1 .
 else
-  echo "pre-push: gitleaks is not installed; the secret scan will run in CI." >&2
-  echo "          Install it from https://github.com/gitleaks/gitleaks/releases" >&2
+  # No gitleaks here: scan the tracked files with secretlint (from npm).
+  # CI still runs gitleaks over the full history on every pull request.
+  node scripts/secret-scan.mjs
 fi
 
 node scripts/pii-scan.mjs

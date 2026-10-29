@@ -23,14 +23,16 @@
     "lint": "eslint .",
     "size": "node scripts/size-check.mjs",
     "scan:pii": "node scripts/pii-scan.mjs",
-    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run check:packages && npm run scan:pii",
+    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run size && npm run check:packages && npm run scan:pii && npm run scan:secrets",
     "test:soak": "HOLDSEND_RUNS=3000 vitest run never-twice",
     "e2e": "npm run e2e --workspace holdsend-example-notes && npm run e2e --workspace holdsend-example-react && npm run e2e --workspace holdsend-example-expo",
-    "check:packages": "node scripts/check-packages.mjs"
+    "check:packages": "node scripts/check-packages.mjs",
+    "scan:secrets": "node scripts/secret-scan.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
     "@eslint/js": "^9.13.0",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.7",
     "@types/node": "^22.20.5",
     "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2",
@@ -40,6 +42,7 @@
     "globals": "^16.5.0",
     "marked": "^17.0.6",
     "pg": "^8.23.1",
+    "secretlint": "13.0.7",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.12.2",
     "vitest": "^5.0.5"
