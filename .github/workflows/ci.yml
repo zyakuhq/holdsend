@@ -72,6 +72,8 @@ jobs:
       - run: npm ci
       - name: Races between real connections
         env:
+          # The throwaway CI database above; its password is public on purpose.
+          # secretlint-disable-next-line
           HOLDSEND_PG_URL: postgres://postgres:holdsend-ci@localhost:5432/holdsend
         run: |
           npx vitest run packages/server/test/real-postgres.test.ts --reporter=default --reporter=json --outputFile=pg-results.json
