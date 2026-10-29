@@ -32,6 +32,16 @@ The body is whatever the app sends. HoldSend adds nothing to it.
 
 Records for content that can wait long in a queue should live as long as the content, not a fixed number of days: a retry can arrive weeks later.
 
+## Emergency messages
+
+The server side of [emergency messages](emergency.md) is the ordinary protocol with three choices. The notes example's `/api/emergency` route is the reference.
+
+- **Require the key.** Call `handleIdempotent` with `requireKey: true`. A message without a key cannot be told apart from its own retry, so it is refused instead of risking two copies.
+- **Keep records as long as a phone may retry.** A message written with no signal can wait a long time before its last attempt. Set `completedTtlMs` at least as long as the longest wait you allow, so a late retry gets the original answer instead of creating a second message. The client stops sending a message after a day without an answer and asks the person first, but a person can approve it later.
+- **Keep the written time apart from the arrival time.** `Written-At` is the sender's claim, kept within the bounds below. Show both to whoever reads the message, and never order by the written time.
+
+The server never promises that a message was read by anyone. It promises only that it was stored once.
+
 ## The request fingerprint
 
 `@holdsend/server` stores a fingerprint of each request, so a reused key with different content can be told apart. The format is frozen, because stored fingerprints must keep matching for as long as their records live:
