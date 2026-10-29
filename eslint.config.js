@@ -22,7 +22,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["examples/**/src/client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs", "examples/react/src/**/*.{js,jsx}", "examples/expo/src/**/*.js", "examples/expo/index.js"],
+    files: ["examples/**/src/client.mjs", "examples/**/src/emergency-client.mjs", "examples/**/src/send.mjs", "examples/**/src/session.mjs", "examples/react/src/**/*.{js,jsx}", "examples/expo/src/**/*.js", "examples/expo/index.js"],
     languageOptions: { globals: globals.browser, parserOptions: { ecmaFeatures: { jsx: true } } },
   },
   {

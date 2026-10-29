@@ -8,6 +8,7 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 - `add()` takes a `decide` option that runs inside the store's atomic update. It can return a queued item instead of adding a new one, or hold the new item until a person approves it. Held items have `held: true` and show as `"needs_confirmation"`. `decide` gets copies, so it cannot change the queue.
 - `add()` takes `askAfterMs`: the item asks a person before it is sent once it is that old, whatever the sending outbox's policy. It is stored on the item as `askBy`, so service workers follow it too.
 - The core README no longer lists state-machine functions that stopped being exported in 0.1.0.
+- The notes example has an emergency page (`/emergency`), with browser tests: the first message goes by itself and later ones wait, repeated taps are one message, and the SMS hand-off can be undone.
 - Every package exports `./package.json`, so tools that read `@holdsend/<name>/package.json` (bundlers, React Native's Metro, version checks) no longer fail with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
 ## 0.1.1 (2026-10-27)
