@@ -75,22 +75,21 @@ const actions = {
     return undefined;
   },
   sms: async (item) => {
+    const number = phoneNumber($("sms-number").value);
+    if (number === null) return "Enter a phone number for the SMS first.";
     let link;
     try {
-      link = smsLink($("sms-number").value, `${item.payload.text}\n(written ${new Date(item.writtenAt).toLocaleString()})`, {
+      link = smsLink(number, `${item.payload.text}\n(written ${new Date(item.writtenAt).toLocaleString()})`, {
         platform: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "ios" : "other",
       });
     } catch {
       return "Enter a phone number for the SMS first.";
     }
-    // smsLink only returns sms: links (digits and encoded text). Check it and
-    // set it on a fixed prefix anyway, so this page can never set another scheme.
     if (!link.startsWith("sms:")) return "Could not build the SMS link.";
-    const href = "sms:" + link.slice("sms:".length);
     // Take it out of the queue first, so it cannot also arrive by data.
     const result = await outbox.cancel(item.key);
     handedOff = result === "cancelled" ? { text: item.payload.text, writtenAt: item.writtenAt } : null;
-    $("sms-link").setAttribute("href", href);
+    $("sms-link").setAttribute("href", link);
     $("sms-note").textContent =
       result === "cancelled"
         ? "Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back."
@@ -100,6 +99,20 @@ const actions = {
     return undefined;
   },
 };
+
+/**
+ * The number as "+" and digits, rebuilt from numeric values, so nothing typed
+ * in the field other than digits can reach the link. Null if it is not a
+ * phone number. Keeps leading zeros (local numbers often start with one).
+ */
+function phoneNumber(typed) {
+  const plus = typed.trim().startsWith("+");
+  const digits = typed.replace(/[^0-9]/g, "");
+  if (digits.length < 2 || digits.length > 15) return null;
+  const zeros = digits.length - digits.replace(/^0+/, "").length;
+  const rest = digits.slice(zeros);
+  return (plus ? "+" : "") + "0".repeat(zeros) + (rest === "" ? "" : String(Number(rest)));
+}
 
 function button(label, action, item) {
   const preview = item.payload.text.length > 40 ? `${item.payload.text.slice(0, 40)}…` : item.payload.text;
