@@ -37,6 +37,8 @@ for (const { dir, pkg } of manifests) {
   }
   if (readFileSync(join(ROOT, where, "LICENSE"), "utf8") !== rootLicense) fail("LICENSE differs from the repository's LICENSE");
   if (readFileSync(join(ROOT, where, "NOTICE"), "utf8") !== rootNotice) fail("NOTICE differs from the repository's NOTICE");
+  // Bundlers, React Native's Metro and other tools read <name>/package.json.
+  if (pkg.exports?.["./package.json"] !== "./package.json") fail('exports must include "./package.json"');
 
   // The files npm would put in the tarball.
   const [packed] = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: join(ROOT, where), encoding: "utf8" }));
@@ -67,6 +69,7 @@ for (const { dir, pkg } of manifests) {
   for (const [how, code] of [
     ["import", `import(${JSON.stringify(pkg.name)}).then(() => {}, (e) => { console.error(e.message); process.exit(1); })`],
     ["require", `require(${JSON.stringify(pkg.name)})`],
+    ["require of package.json", `require(${JSON.stringify(pkg.name + "/package.json")})`],
   ]) {
     try {
       execFileSync(process.execPath, ["-e", code], { cwd: ROOT, stdio: "pipe" });

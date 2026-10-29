@@ -2,6 +2,10 @@
 
 All notable changes to the `@holdsend` packages. All four packages share one version number.
 
+## Unreleased
+
+- Every package exports `./package.json`, so tools that read `@holdsend/<name>/package.json` (bundlers, React Native's Metro, version checks) no longer fail with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+
 ## 0.1.1 (2026-10-27)
 
 No API changes. Fixes and documentation from an independent source review of 0.1.0.
