@@ -14,7 +14,8 @@ ESM only. Load it with `import` on Node 20 or later, in browsers and in React Na
 
 - `Outbox`: add, list, cancel, approve, retry, discard and flush.
 - `MemoryStore`: an in-memory store for tests. Platform packages provide durable stores.
-- The rules as pure functions (`claim`, `settle`, `cancel`, `approve`, `retry`, `discard`, `statusOf`, ...), for anyone building their own runtime.
+- `statusOf` and `needsConfirmation`, for showing items. The rest of the state machine is internal, so it can change without breaking anyone.
+- In development for 0.2, not in a published release yet: `@holdsend/core/emergency`, for short emergency messages (the first goes by itself, later ones wait for the person, repeated taps are one message, SMS hand-off). See [emergency messages](https://github.com/zyakuhq/holdsend/blob/main/docs/emergency.md).
 - The wire protocol: `requestHeaders`, `classifyResponse`, `classifyThrown`.
 - Written-time rules shared with servers: `acceptWrittenAt`, `wasWrittenOffline`.
 

@@ -13,6 +13,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./emergency": {
+      "types": "./dist/emergency.d.ts",
+      "import": "./dist/emergency.js",
+      "default": "./dist/emergency.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
