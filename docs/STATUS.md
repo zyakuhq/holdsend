@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-29 (night, emergency server rules in the protocol docs)
+Last updated: 2026-10-30 (Phase 2 audit, first fixes)
 
 ## Done
 
@@ -32,13 +32,15 @@ Last updated: 2026-10-29 (night, emergency server rules in the protocol docs)
 - **0.1.0 published to npm (2026-10-26)**: `@holdsend/core`, `@holdsend/server`, `@holdsend/web` and `@holdsend/react-native`, each with provenance, after the project lead's approval. The first attempt stopped because the token asked for a one-time password; a token that allows automation fixed it. Checked by installing all four in an empty project and loading each with import and require.
 - Example: a notes app (Express + Postgres or PGlite, plain browser page, service worker) in [examples/notes](../examples/notes), with browser tests in CI for airplane mode, a lost answer, two tabs, arrival ordering and the offline feed. Reviewed independently; the review's findings were fixed (background sync waits for a busy tab, the worker sends only the signed-in person's notes, keys are required, the outbox actions report what happened).
 
+- Phase 2 audit by two separate reviewers (2026-10-30): first fixes merged (held-by-old-message bug, SMS number check, doc corrections); the rest is listed in [audits/2026-10-30-phase2-audit.md](audits/2026-10-30-phase2-audit.md).
+
 ## In progress
 
 - Phase 2, the emergency module (v0.2). The library part is merged. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
 ## Next tasks
 
-1. The Phase 2 audit by separate reviewers (core emergency code, the example page and service worker, the docs), and fixes.
+1. The open items of the Phase 2 audit (SMS hand-off persistence first, then flush ordering, service worker cache), each with a test.
 2. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
 
 ## After that
