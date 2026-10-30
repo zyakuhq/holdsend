@@ -345,3 +345,15 @@ describe("smsLink", () => {
     expect(() => smsLink("+14155550199", "broken \ud800 text")).toThrow(TypeError);
   });
 });
+
+describe("review 2026-10-30", () => {
+  it("an ignored old message does not hold a new first message", async () => {
+    const { clock, emergency, sentTexts } = setup();
+    await emergency.write("old one");
+    clock.t += 2 * DAY;
+    const r = await emergency.write("NEW trapped");
+    expect(r.held).toBe(false);
+    await emergency.outbox.flush();
+    expect(sentTexts()).toContain("NEW trapped");
+  });
+});

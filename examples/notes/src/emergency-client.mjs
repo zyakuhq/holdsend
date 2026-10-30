@@ -107,8 +107,9 @@ const actions = {
  */
 function phoneNumber(typed) {
   const plus = typed.trim().startsWith("+");
+  if (!/^\+?[0-9\s().-]+$/.test(typed.trim())) return null;
   const digits = typed.replace(/[^0-9]/g, "");
-  if (digits.length < 2 || digits.length > 15) return null;
+  if (digits.length < 5 || digits.length > 15) return null;
   const zeros = digits.length - digits.replace(/^0+/, "").length;
   const rest = digits.slice(zeros);
   return (plus ? "+" : "") + "0".repeat(zeros) + (rest === "" ? "" : String(Number(rest)));

@@ -11,8 +11,8 @@ Why these rules: [decision 0007](decisions/0007-emergency-messages.md). To try i
 - **Its own queue.** Give emergency messages their own store and their own sender lock (see below), so a large upload in the app's main queue cannot hold them up.
 - **The first message goes by itself.** When the connection returns, the first message a person wrote is sent automatically. Messages written while it was still waiting are held, and go only when the person presses Send for each, or Send all. Choose `autoSend: "all"` or `"none"` for a different rule.
 - **Repeated taps are one message.** The same words (ignoring case and extra spaces), written within ten minutes of when a waiting message was written, return that message instead of queuing a new one. A message stuck after the server refused it is not matched, so writing it again queues a new one.
-- **Old messages ask first.** A message still waiting a day after it was written is not sent automatically. The app shows when it was written and asks. This rule, and whether a message is held, are stored with each message, so a service worker or any other sender over the same store follows them too.
-- **Never twice.** Every message keeps one idempotency key for life, like any HoldSend item. The server's half (`handleIdempotent` with `requireKey: true`) answers a retry with the original.
+- **Old messages ask first.** A message still waiting a day after it was written is not sent automatically. The app shows when it was written and asks. This rule, and whether a message is held, are stored with each message, so a service worker or any other sender over the same store follows them too. Approval is final: once the person presses Send, the message is sent without another age check.
+- **One key per message.** Every message keeps one idempotency key for life, like any HoldSend item. The server's half (`handleIdempotent` with `requireKey: true`) answers a retry with the original.
 
 ## Using it
 

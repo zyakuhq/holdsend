@@ -112,7 +112,7 @@ export class EmergencyOutbox {
           held = statusOf(same, now, this.policy) === "needs_confirmation";
           return same;
         }
-        if (this.autoSend === "none" || (this.autoSend === "first" && mine.length > 0)) {
+        if (this.autoSend === "none" || (this.autoSend === "first" && mine.some((i) => i.held || statusOf(i, now, this.policy) !== "needs_confirmation"))) {
           held = true;
           return "hold";
         }
