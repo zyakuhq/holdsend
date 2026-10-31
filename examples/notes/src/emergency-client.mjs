@@ -61,7 +61,7 @@ async function act(fn) {
 
 /**
  * Messages handed to SMS, kept on this device so a closed or killed page still
- * shows them and can put them back. Each is { id, text, writtenAt, href }.
+ * shows them and can put them back. Each is { id, text, writtenAt, number }; the link is rebuilt from them, never read back from storage.
  * Only messages that were removed from the queue are kept: one that may
  * already have been sent by data is just reported, and not offered for undo.
  */
@@ -71,7 +71,7 @@ function loadHandoffs() {
   try {
     const parsed = JSON.parse(localStorage.getItem(HANDOFF_KEY) ?? "[]");
     return Array.isArray(parsed)
-      ? parsed.filter((h) => h && typeof h.id === "string" && typeof h.text === "string" && typeof h.href === "string" && h.href.startsWith("sms:") && Number.isFinite(h.writtenAt))
+      ? parsed.filter((h) => h && typeof h.id === "string" && typeof h.text === "string" && typeof h.number === "string" && phoneNumber(h.number) === h.number && Number.isFinite(h.writtenAt))
       : [];
   } catch {
     return [];
@@ -88,6 +88,15 @@ function saveHandoffs(list) {
 
 let handoffs = loadHandoffs();
 
+function smsHref(number, text, writtenAt) {
+  const link = smsLink(number, `${text}\n(written ${new Date(writtenAt).toLocaleString()})`, {
+    platform: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "ios" : "other",
+  });
+  return link.startsWith("sms:") ? link : "#";
+}
+
+const handoffLink = (h) => smsHref(h.number, h.text, h.writtenAt);
+
 function renderHandoffs(note) {
   if (note !== undefined) $("sms-note").textContent = note;
   $("sms-handoff").hidden = handoffs.length === 0 && !$("sms-note").textContent;
@@ -97,7 +106,7 @@ function renderHandoffs(note) {
         "li",
         { "data-handoff": h.id },
         el("p", { class: "note-text" }, h.text),
-        el("p", {}, el("a", { class: "sms-link", href: h.href }, "Open your messaging app")),
+        el("p", {}, el("a", { class: "sms-link", href: handoffLink(h) }, "Open your messaging app")),
         el("button", { type: "button", "data-action": "sms-undo", onclick: () => act(() => putBack(h.id)) }, "Put it back in the queue"),
         el("button", { type: "button", "data-action": "sms-done", onclick: () => act(() => markSent(h.id)) }, "I sent it by SMS"),
       ),
@@ -139,17 +148,15 @@ const actions = {
     if (number === null) return "Enter a phone number for the SMS first.";
     let link;
     try {
-      link = smsLink(number, `${item.payload.text}\n(written ${new Date(item.writtenAt).toLocaleString()})`, {
-        platform: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "ios" : "other",
-      });
+      link = smsHref(number, item.payload.text, item.writtenAt);
     } catch {
       return "Enter a phone number for the SMS first.";
     }
-    if (!link.startsWith("sms:")) return "Could not build the SMS link.";
+    if (link === "#") return "Could not build the SMS link.";
     // Take it out of the queue first, so it cannot also arrive by data.
     const result = await outbox.cancel(item.key);
     if (result === "cancelled") {
-      handoffs = [...handoffs, { id: item.key, text: item.payload.text, writtenAt: item.writtenAt, href: link }];
+      handoffs = [...handoffs, { id: item.key, text: item.payload.text, writtenAt: item.writtenAt, number }];
       saveHandoffs(handoffs);
       renderHandoffs("Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back.");
     } else {
