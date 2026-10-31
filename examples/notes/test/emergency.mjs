@@ -128,7 +128,7 @@ export function runEmergencyScenarios() {
     await page.fill("#sms-number", "+1 (415) 555-0199");
     await page.click("#outbox button[data-action='sms']");
     await page.waitForSelector("#sms-handoff:not([hidden])");
-    const href = await page.getAttribute("#sms-link", "href");
+    const href = await page.getAttribute("#sms-list .sms-link", "href");
     assert.match(href, /^sms:\+14155550199\?body=Call%20me%2C%20battery%20low/);
     assert.equal((await waiting(page)).length, 0);
 
@@ -139,9 +139,41 @@ export function runEmergencyScenarios() {
     assert.deepEqual(await received(user), []);
 
     // The person did not send the SMS after all: put it back, and it goes once.
-    await page.click("#sms-undo");
+    await page.click("#sms-list button[data-action='sms-undo']");
     await waitUntil(async () => (await received(user)).length === 1, "the message to arrive after being put back");
     assert.deepEqual(await received(user), ["Call me, battery low"]);
+    await context.close();
+  });
+
+  test("emergency: a hand-off is still there after the page is closed and opened again", async () => {
+    const context = await browser.newContext();
+    const page = await openPage(context);
+    const user = await userOf(page);
+
+    await goOffline(context, page);
+    await write(page, "Stuck at the station");
+    await page.fill("#sms-number", "+1 415 555 0123");
+    await page.click("#outbox button[data-action='sms']");
+    await page.waitForSelector("#sms-list li");
+    await page.close();
+
+    // A new page (the old one was closed, or the browser killed it): the hand-off is shown again.
+    const again = await openPage(context);
+    await again.waitForSelector("#sms-list li");
+    assert.match(await again.textContent("#sms-list li"), /Stuck at the station/);
+    assert.match(await again.getAttribute("#sms-list .sms-link", "href"), /^sms:\+14155550123\?body=Stuck%20at%20the%20station/);
+    assert.equal((await waiting(again)).length, 0);
+    assert.deepEqual(await received(user), []);
+
+    // Put it back: it goes once, and the hand-off disappears for good.
+    await context.setOffline(false);
+    await again.click("#sms-list button[data-action='sms-undo']");
+    await waitUntil(async () => (await received(user)).length === 1, "the message to arrive after being put back");
+    assert.equal(await again.locator("#sms-list li").count(), 0);
+    await again.reload();
+    await again.waitForSelector("body[data-ready='true']");
+    assert.equal(await again.locator("#sms-list li").count(), 0);
+    assert.deepEqual(await received(user), ["Stuck at the station"]);
     await context.close();
   });
 

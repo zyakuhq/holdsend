@@ -59,8 +59,68 @@ async function act(fn) {
   await render();
 }
 
-/** The last message handed to SMS, so it can be put back. */
-let handedOff = null;
+/**
+ * Messages handed to SMS, kept on this device so a closed or killed page still
+ * shows them and can put them back. Each is { id, text, writtenAt, href }.
+ * Only messages that were removed from the queue are kept: one that may
+ * already have been sent by data is just reported, and not offered for undo.
+ */
+const HANDOFF_KEY = `holdsend-notes-sms-handoffs:${owner}`;
+
+function loadHandoffs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HANDOFF_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((h) => h && typeof h.id === "string" && typeof h.text === "string" && typeof h.href === "string" && h.href.startsWith("sms:") && Number.isFinite(h.writtenAt))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHandoffs(list) {
+  try {
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify(list));
+  } catch {
+    // Storage blocked or full: the hand-off still works for this page's life.
+  }
+}
+
+let handoffs = loadHandoffs();
+
+function renderHandoffs(note) {
+  if (note !== undefined) $("sms-note").textContent = note;
+  $("sms-handoff").hidden = handoffs.length === 0 && !$("sms-note").textContent;
+  $("sms-list").replaceChildren(
+    ...handoffs.map((h) =>
+      el(
+        "li",
+        { "data-handoff": h.id },
+        el("p", { class: "note-text" }, h.text),
+        el("p", {}, el("a", { class: "sms-link", href: h.href }, "Open your messaging app")),
+        el("button", { type: "button", "data-action": "sms-undo", onclick: () => act(() => putBack(h.id)) }, "Put it back in the queue"),
+        el("button", { type: "button", "data-action": "sms-done", onclick: () => act(() => markSent(h.id)) }, "I sent it by SMS"),
+      ),
+    ),
+  );
+}
+
+async function putBack(id) {
+  const h = handoffs.find((x) => x.id === id);
+  if (!h) return undefined;
+  await emergency.write(h.text, { owner, writtenAt: h.writtenAt });
+  handoffs = handoffs.filter((x) => x.id !== id);
+  saveHandoffs(handoffs);
+  renderHandoffs(handoffs.length === 0 ? "" : undefined);
+  return "Put back in the queue.";
+}
+
+function markSent(id) {
+  handoffs = handoffs.filter((x) => x.id !== id);
+  saveHandoffs(handoffs);
+  renderHandoffs(handoffs.length === 0 ? "" : undefined);
+  return "Marked as sent by SMS.";
+}
 
 const actions = {
   send: async (item) => {
@@ -88,14 +148,15 @@ const actions = {
     if (!link.startsWith("sms:")) return "Could not build the SMS link.";
     // Take it out of the queue first, so it cannot also arrive by data.
     const result = await outbox.cancel(item.key);
-    handedOff = result === "cancelled" ? { text: item.payload.text, writtenAt: item.writtenAt } : null;
-    $("sms-link").setAttribute("href", link);
-    $("sms-note").textContent =
-      result === "cancelled"
-        ? "Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back."
-        : "This message may already have been sent, so it may arrive twice.";
-    $("sms-undo").hidden = handedOff === null;
-    $("sms-handoff").hidden = false;
+    if (result === "cancelled") {
+      handoffs = [...handoffs, { id: item.key, text: item.payload.text, writtenAt: item.writtenAt, href: link }];
+      saveHandoffs(handoffs);
+      renderHandoffs("Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back.");
+    } else {
+      renderHandoffs("This message may already have been sent, so it may arrive twice. Use this link only if you still want to send it by SMS.");
+      $("sms-list").append(el("li", {}, el("p", { class: "note-text" }, item.payload.text), el("p", {}, el("a", { class: "sms-link", href: link }, "Open your messaging app"))));
+      $("sms-handoff").hidden = false;
+    }
     return undefined;
   },
 };
@@ -215,16 +276,6 @@ $("send-all").addEventListener("click", () =>
   }),
 );
 
-$("sms-undo").addEventListener("click", () =>
-  act(async () => {
-    if (!handedOff) return undefined;
-    await emergency.write(handedOff.text, { owner, writtenAt: handedOff.writtenAt });
-    handedOff = null;
-    $("sms-handoff").hidden = true;
-    return "Put back in the queue.";
-  }),
-);
-
 window.addEventListener("online", () => {
   renderConnection();
   void renderReceived();
@@ -235,6 +286,7 @@ window.addEventListener("offline", renderConnection);
 setInterval(() => void render(), 2000);
 
 renderConnection();
+renderHandoffs(handoffs.length > 0 ? "Handed to SMS earlier. If you did not press send in your messaging app, put the message back." : undefined);
 await renderReceived();
 await registerBackgroundSync();
 await render();
