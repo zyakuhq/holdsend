@@ -63,6 +63,8 @@ const link = smsLink("+14155550199", `${item.payload.text}\n(written ${timeLabel
 
 Open the link with `location.href = link` on the web or `Linking.openURL(link)` in React Native. It opens the phone's messaging app with the text filled in, and the person presses send there. One recipient uses the standard form. For several recipients, pass `{ platform: "ios" }` on iPhones, which need a different link for that case. How phones read these links has changed between versions, so test them on the phones your people use.
 
+After `cancel` the message is no longer in the queue, so the library cannot show it again. If the page is closed or killed before the person presses send in the messaging app, the text is gone unless your app kept it. Keep the text and its written time on the device (the notes example uses `localStorage`, per person), show it again on the next visit, and offer "Put it back in the queue" (call `write()` with the same text and `writtenAt`) and "I sent it". The library does not do this for you yet.
+
 ## What each platform can do
 
 | Where | Sent with the app closed? | What to tell the person |

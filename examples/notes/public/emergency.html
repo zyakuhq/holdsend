@@ -46,7 +46,7 @@
       li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
       .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
       #sms-handoff { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
-      #sms-link { font-weight: 600; color: var(--accent); }
+      .sms-link { font-weight: 600; color: var(--accent); }
     </style>
   </head>
   <body>
@@ -75,8 +75,7 @@
       <p class="hint">"Send by SMS" opens your messaging app with the text filled in. You still press send there, and it needs phone signal.</p>
       <div id="sms-handoff" hidden>
         <p id="sms-note"></p>
-        <p><a id="sms-link" href="#">Open your messaging app</a></p>
-        <button type="button" id="sms-undo">Put it back in the queue</button>
+        <ul id="sms-list"></ul>
       </div>
 
       <h2>Received by the server</h2>
