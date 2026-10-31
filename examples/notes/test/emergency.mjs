@@ -161,6 +161,7 @@ export function runEmergencyScenarios() {
     const again = await openPage(context);
     await again.waitForSelector("#sms-list li");
     assert.match(await again.textContent("#sms-list li"), /Stuck at the station/);
+    await again.fill("#sms-number", "+1 415 555 0123");
     assert.match(await again.getAttribute("#sms-list .sms-link", "href"), /^sms:\+14155550123\?body=Stuck%20at%20the%20station/);
     assert.equal((await waiting(again)).length, 0);
     assert.deepEqual(await received(user), []);
