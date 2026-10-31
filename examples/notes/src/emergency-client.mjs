@@ -61,7 +61,7 @@ async function act(fn) {
 
 /**
  * Messages handed to SMS, kept on this device so a closed or killed page still
- * shows them and can put them back. Each is { id, text, writtenAt, number }; the link is rebuilt from them, never read back from storage.
+ * shows them and can put them back. Each is { id, text, writtenAt }. The phone number is not stored: the link is rebuilt from the number field, which the person fills in again after a reload.
  * Only messages that were removed from the queue are kept: one that may
  * already have been sent by data is just reported, and not offered for undo.
  */
@@ -71,7 +71,7 @@ function loadHandoffs() {
   try {
     const parsed = JSON.parse(localStorage.getItem(HANDOFF_KEY) ?? "[]");
     return Array.isArray(parsed)
-      ? parsed.filter((h) => h && typeof h.id === "string" && typeof h.text === "string" && typeof h.number === "string" && phoneNumber(h.number) === h.number && Number.isFinite(h.writtenAt))
+      ? parsed.filter((h) => h && typeof h.id === "string" && typeof h.text === "string" && Number.isFinite(h.writtenAt))
       : [];
   } catch {
     return [];
@@ -95,7 +95,10 @@ function smsHref(number, text, writtenAt) {
   return link.startsWith("sms:") ? link : "#";
 }
 
-const handoffLink = (h) => smsHref(h.number, h.text, h.writtenAt);
+function handoffLink(h) {
+  const number = phoneNumber($("sms-number").value);
+  return number === null ? "#" : smsHref(number, h.text, h.writtenAt);
+}
 
 function renderHandoffs(note) {
   if (note !== undefined) $("sms-note").textContent = note;
@@ -106,7 +109,7 @@ function renderHandoffs(note) {
         "li",
         { "data-handoff": h.id },
         el("p", { class: "note-text" }, h.text),
-        el("p", {}, el("a", { class: "sms-link", href: handoffLink(h) }, "Open your messaging app")),
+        el("p", {}, el("a", { class: "sms-link", href: handoffLink(h) }, "Open your messaging app (enter the number above first)")),
         el("button", { type: "button", "data-action": "sms-undo", onclick: () => act(() => putBack(h.id)) }, "Put it back in the queue"),
         el("button", { type: "button", "data-action": "sms-done", onclick: () => act(() => markSent(h.id)) }, "I sent it by SMS"),
       ),
@@ -156,7 +159,7 @@ const actions = {
     // Take it out of the queue first, so it cannot also arrive by data.
     const result = await outbox.cancel(item.key);
     if (result === "cancelled") {
-      handoffs = [...handoffs, { id: item.key, text: item.payload.text, writtenAt: item.writtenAt, number }];
+      handoffs = [...handoffs, { id: item.key, text: item.payload.text, writtenAt: item.writtenAt }];
       saveHandoffs(handoffs);
       renderHandoffs("Removed from the queue, so it will not also be sent by data. Press send in your messaging app. If you don't, put it back.");
     } else {
@@ -292,6 +295,7 @@ window.addEventListener("offline", renderConnection);
 // Other tabs and the service worker change the same queue; look again now and then.
 setInterval(() => void render(), 2000);
 
+$("sms-number").addEventListener("input", () => renderHandoffs());
 renderConnection();
 renderHandoffs(handoffs.length > 0 ? "Handed to SMS earlier. If you did not press send in your messaging app, put the message back." : undefined);
 await renderReceived();
