@@ -11,12 +11,12 @@ Two separate reviewers read the emergency code, the notes example page and worke
 
 ## Decided, not changed
 
+- (2026-11-01) Flush order: oldest first, no ordered delivery, by [decision 0008](../decisions/0008-flush-order.md), with a test.
 - Approval is final (no second age check). This is intended and now documented.
 
 ## Open for the next session
 
 - The hand-off record lives in the example app, not the library; apps need their own. Moving a "handed off" state into the core is not decided.
-- A flush pass may send a later message after an earlier one got a retry (order is not guaranteed). Needs an ordered mode or documentation.
 - A backdated `writtenAt` can reorder messages; a fast device clock shifts the one-day rule.
 - iOS multi-recipient SMS link leaves `+` unencoded; iOS link shapes need a real-device test.
 - Service worker cache: ignore query strings, handle rejections, clear the timer. Register the worker before the first network await.
