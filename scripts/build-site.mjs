@@ -56,6 +56,7 @@ export const PAGES = [
       ["0005 Web store and tabs", "docs/decisions/0005-web-store-and-tabs.md"],
       ["0006 React Native store", "docs/decisions/0006-react-native-store-and-scheduler.md"],
       ["0007 Emergency messages", "docs/decisions/0007-emergency-messages.md"],
+      ["0008 Flush order", "docs/decisions/0008-flush-order.md"],
     ],
   ],
   [

@@ -82,3 +82,7 @@ In the service worker, handle the emergency queue's own tag with `onBackgroundSy
 - Send an SMS by itself, or contact emergency services. No web page or app can send an SMS without the person pressing send.
 - Guarantee delivery. It keeps trying and keeps the person informed. If the message cannot get out, it says so.
 - Tell two different messages with the same words apart while both wait within the matching window. They are treated as one, on purpose.
+
+## Order
+
+A flush tries messages oldest written first, but a message that must retry does not hold later ones back, so messages can arrive out of order. If order matters to the reader, show the written time beside each message or add a sequence number to the text. See [decision 0008](decisions/0008-flush-order.md).

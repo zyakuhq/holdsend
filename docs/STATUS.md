@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-10-31 (SMS hand-off survives a closed page)
+Last updated: 2026-11-01 (flush order decided and tested)
 
 ## Done
 
@@ -35,13 +35,15 @@ Last updated: 2026-10-31 (SMS hand-off survives a closed page)
 - Phase 2 audit by two separate reviewers (2026-10-30): first fixes merged (held-by-old-message bug, SMS number check, doc corrections); the rest is listed in [audits/2026-10-30-phase2-audit.md](audits/2026-10-30-phase2-audit.md).
 - SMS hand-off persistence in the notes example (2026-10-31): handed-off messages are kept on the device, shown again after a closed page, and can be put back or marked sent. The phone number is not stored (CodeQL flagged it); the person types it again. Library-level state is not decided ([audit](audits/2026-10-30-phase2-audit.md)).
 
+- Flush order (2026-11-01): [decision 0008](decisions/0008-flush-order.md). A flush tries items oldest written first; a retry does not hold later items back, so order is not guaranteed. Pinned by a test, written in [emergency.md](emergency.md). No core code changed (the core is at its size budget).
+
 ## In progress
 
 - Phase 2, the emergency module (v0.2). The library part is merged. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
 ## Next tasks
 
-1. The open items of the Phase 2 audit (flush ordering first, then service worker cache, then `writtenAt` and clock questions), each with a test.
+1. The open items of the Phase 2 audit (service worker cache first, then `writtenAt` and clock questions), each with a test.
 2. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
 
 ## After that
