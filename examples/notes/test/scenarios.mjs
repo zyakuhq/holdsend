@@ -64,6 +64,15 @@ export function runNotesScenarios(appOptions = {}) {
 
   const outboxCount = (page) => page.evaluate(() => document.querySelectorAll("#outbox li").length);
 
+  test("offline: the page still opens when its address has a query string", async () => {
+    const context = await browser.newContext();
+    const page = await openPage(context);
+    await context.setOffline(true);
+    await page.goto(`${base}/?from=link`);
+    await page.waitForSelector("body[data-ready='true']");
+    await context.close();
+  });
+
   test("airplane mode: notes survive an offline reload and are published once when the connection returns", async () => {
     const context = await browser.newContext();
     const page = await openPage(context);
