@@ -30,18 +30,28 @@ self.addEventListener("activate", (event) => {
 /** The network's answer, or the cached copy when the network fails or is too slow. */
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
+  // A query string must not make a cached page a miss.
+  const cached = () => cache.match(request, { ignoreSearch: true });
   const network = fetch(request).then((response) => {
-    if (response.ok) void cache.put(request, response.clone());
+    // A full cache or a failed write must not break the page.
+    if (response.ok) cache.put(request, response.clone()).catch(() => undefined);
     return response;
   });
-  const slow = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_WAIT_MS));
+  // The network's own failure is handled below; this only stops an unhandled rejection.
+  network.catch(() => undefined);
+  let timer;
+  const slow = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), NETWORK_WAIT_MS);
+  });
   try {
     const first = await Promise.race([network, slow]);
     if (first) return first;
     // Too slow: use the cache if there is a copy, otherwise keep waiting.
-    return (await cache.match(request)) ?? (await network);
+    return (await cached()) ?? (await network);
   } catch {
-    return (await cache.match(request)) ?? Response.error();
+    return (await cached()) ?? Response.error();
+  } finally {
+    clearTimeout(timer);
   }
 }
 

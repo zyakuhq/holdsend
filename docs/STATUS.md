@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-01 (flush order decided and tested)
+Last updated: 2026-11-02 (service worker cache fixes)
 
 ## Done
 
@@ -35,6 +35,8 @@ Last updated: 2026-11-01 (flush order decided and tested)
 - Phase 2 audit by two separate reviewers (2026-10-30): first fixes merged (held-by-old-message bug, SMS number check, doc corrections); the rest is listed in [audits/2026-10-30-phase2-audit.md](audits/2026-10-30-phase2-audit.md).
 - SMS hand-off persistence in the notes example (2026-10-31): handed-off messages are kept on the device, shown again after a closed page, and can be put back or marked sent. The phone number is not stored (CodeQL flagged it); the person types it again. Library-level state is not decided ([audit](audits/2026-10-30-phase2-audit.md)).
 
+- Notes example service worker (2026-11-02): cache lookups ignore query strings, cache write failures are swallowed, the timer is cleared, the worker registers before the first await. Browser test added, checked to fail without the fix.
+
 - Flush order (2026-11-01): [decision 0008](decisions/0008-flush-order.md). A flush tries items oldest written first; a retry does not hold later items back, so order is not guaranteed. Pinned by a test, written in [emergency.md](emergency.md). No core code changed (the core is at its size budget).
 
 ## In progress
@@ -43,7 +45,7 @@ Last updated: 2026-11-01 (flush order decided and tested)
 
 ## Next tasks
 
-1. The open items of the Phase 2 audit (service worker cache first, then `writtenAt` and clock questions), each with a test.
+1. The open items of the Phase 2 audit (`writtenAt` and clock questions first, then the `decide` retry flags and Unicode in `sameWords`, then the missing browser tests), each with a test.
 2. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
 
 ## After that

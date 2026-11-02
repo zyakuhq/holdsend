@@ -9,6 +9,10 @@ import { demoUser, writeSignedInOwner } from "./session.mjs";
 const $ = (id) => document.getElementById(id);
 
 const owner = demoUser();
+// Register the worker before the first await, so a slow store cannot delay it.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+}
 await writeSignedInOwner(owner); // so the service worker sends only this person's messages
 const isOnline = () => navigator.onLine !== false;
 
@@ -302,7 +306,4 @@ await renderReceived();
 await registerBackgroundSync();
 await render();
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-}
 document.body.dataset.ready = "true";
