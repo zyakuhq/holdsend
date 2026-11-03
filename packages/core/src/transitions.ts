@@ -55,10 +55,15 @@ function forOwner(item: OutboxItem, owner: string | undefined): boolean {
  * Held, or written longer ago than the confirmation age; not approved, not finished.
  * Such an item is never sent automatically: the world it was written about
  * may have moved on. A person sees it and chooses Send or Discard.
+ *
+ * A written time later than now (by more than a claim can last) means the
+ * device clock was set back after writing, so the item's real age is unknown:
+ * it asks too, rather than going out stale while the clock catches up.
  */
 export function needsConfirmation(item: OutboxItem, now: number, policy: Policy = DEFAULT_POLICY): boolean {
   if (item.state === "sent" || item.approvedAt !== undefined) return false;
-  if (!item.held && !(now - item.writtenAt > policy.confirmAfterMs) && !(now > (item.askBy ?? Infinity))) return false;
+  const age = now - item.writtenAt;
+  if (!item.held && age <= policy.confirmAfterMs && age >= -policy.staleClaimMs && now <= (item.askBy ?? now)) return false;
   // Being sent right now is not "waiting for a person": it is being sent.
   return !isClaimLive(item, now, policy);
 }

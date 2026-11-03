@@ -188,12 +188,17 @@ async function runHistory(steps: Step[], fates: Fate[], makeStore: () => Store<P
     }
   }
 
-  // ---- recovery: reliable network, dead claims expire, people press Try again ----
+  // ---- recovery: reliable network, dead claims expire, people press Try again,
+  // and Send on anything that asks first (a device clock that ran ahead and was
+  // set back leaves items whose age is unknown, so they ask) ----
   reliable = true;
   clock += 10 * MIN;
   const final = newSender(9);
   for (let round = 0; round < 10; round += 1) {
-    for (const entry of await final.list()) if (entry.status === "stuck") await final.retry(entry.item.key);
+    for (const entry of await final.list()) {
+      if (entry.status === "stuck") await final.retry(entry.item.key);
+      if (entry.status === "needs_confirmation") await final.approve(entry.item.key);
+    }
     await final.flush("person-a");
     if ((await final.list()).length === 0) break;
     clock += 10 * MIN; // past any retry delay before the next round

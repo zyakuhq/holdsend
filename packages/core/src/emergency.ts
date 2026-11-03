@@ -39,7 +39,12 @@ export interface EmergencyOutboxOptions extends OutboxOptions<EmergencyMessage> 
 export interface WriteOptions {
   /** Who wrote it. Matching and "first" are per person. */
   owner?: string;
-  /** When the person wrote it. Defaults to now. */
+  /**
+   * When the person wrote it. Defaults to now. Pass only the real time, for
+   * example when putting back a message handed off to SMS: it decides the
+   * order of tries, the one-day rule and matching. A time later than now
+   * (beyond two minutes of clock difference) is refused.
+   */
   writtenAt?: number;
 }
 
@@ -51,9 +56,13 @@ export interface WriteResult {
   held: boolean;
 }
 
-/** Lower case, trimmed, runs of spaces as one: what "the same words" means. */
+/**
+ * What "the same words" means: Unicode compatibility form (so an accented
+ * letter typed two ways, or full-width letters, match), trimmed, runs of
+ * spaces as one, lower case.
+ */
 export function sameWords(text: string): string {
-  return text.trim().replace(/\s+/g, " ").toLowerCase();
+  return text.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 export class EmergencyOutbox {
@@ -87,7 +96,9 @@ export class EmergencyOutbox {
     const trimmed = text.trim();
     if (trimmed === "") throw new TypeError("text must not be empty");
     if (trimmed.length > this.maxLength) throw new RangeError(`text must be at most ${this.maxLength} characters`);
-    const writtenAt = options.writtenAt ?? this.now();
+    const at = this.now();
+    const writtenAt = Math.min(options.writtenAt ?? at, at);
+    if ((options.writtenAt ?? at) - at > this.policy.staleClaimMs) throw new RangeError("writtenAt must not be in the future");
     const words = sameWords(trimmed);
     let duplicate = false;
     let held = false;
@@ -97,6 +108,9 @@ export class EmergencyOutbox {
       // Stored on the message, so a service worker's plain Outbox asks too.
       askAfterMs: this.policy.confirmAfterMs,
       decide: (queued) => {
+        // A store may run this more than once; only the last run counts.
+        duplicate = false;
+        held = false;
         const now = this.now();
         // A stuck message waits for the person to retry or discard it; it is
         // neither "the same message" nor a reason to hold a new one.
@@ -172,6 +186,7 @@ export function smsLink(to: string | readonly string[], body: string, options: S
   } catch {
     throw new TypeError("body must be valid text");
   }
-  if (numbers.length > 1 && options.platform === "ios") return `sms://open?addresses=${numbers.join(",")}&body=${text}`;
+  // In a query string a bare "+" can be read as a space, so it is encoded there.
+  if (numbers.length > 1 && options.platform === "ios") return `sms://open?addresses=${numbers.map(encodeURIComponent).join(",")}&body=${text}`;
   return `sms:${numbers.join(",")}?body=${text}`;
 }

@@ -9,6 +9,8 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 - `add()` takes `askAfterMs`: the item asks a person before it is sent once it is that old, whatever the sending outbox's policy. It is stored on the item as `askBy`, so service workers follow it too.
 - The core README no longer lists state-machine functions that stopped being exported in 0.1.0.
 - The notes example has an emergency page (`/emergency`), with browser tests: the first message goes by itself and later ones wait, repeated taps are one message, and the SMS hand-off can be undone.
+- An item whose written time is later than now by more than `staleClaimMs` (the device clock ran ahead and was set back since) now asks a person before it is sent, like an old item, because its real age is unknown. Before, it could go out stale until real time caught up.
+- Emergency messages: `write()` refuses a `writtenAt` in the future; matching treats the different Unicode forms of the same letters as the same words; a retried store update no longer leaves a wrong `duplicate` or `held` in the result; `smsLink` encodes `+` in the iOS multi-recipient link, where a bare `+` can be read as a space.
 - Every package exports `./package.json`, so tools that read `@holdsend/<name>/package.json` (bundlers, React Native's Metro, version checks) no longer fail with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
 ## 0.1.1 (2026-10-27)
