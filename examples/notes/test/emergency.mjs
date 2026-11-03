@@ -178,6 +178,107 @@ export function runEmergencyScenarios() {
     await context.close();
   });
 
+  test("emergency: with every page closed, the service worker's background sync sends the first message only", async () => {
+    const context = await browser.newContext();
+    const page = await openPage(context);
+    const user = await userOf(page);
+
+    await goOffline(context, page);
+    await write(page, "Car stuck on the pass");
+    await write(page, "Phone at five percent");
+    // Leave the emergency page, so no page sends this queue any more.
+    await page.goto("about:blank");
+    await context.setOffline(false);
+
+    // Fire the queue's background sync the way the browser would.
+    const cdp = await context.newCDPSession(page);
+    const registrations = [];
+    cdp.on("ServiceWorker.workerRegistrationUpdated", (e) => registrations.push(...e.registrations));
+    await cdp.send("ServiceWorker.enable");
+    await waitUntil(async () => registrations.some((r) => r.scopeURL.startsWith(base) && !r.isDeleted), "the worker's registration");
+    const { registrationId } = registrations.find((r) => r.scopeURL.startsWith(base) && !r.isDeleted);
+    await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: base, registrationId, tag: "holdsend-emergency", lastChance: false });
+
+    await waitUntil(async () => (await received(user)).length === 1, "the worker to send the first message");
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.deepEqual(await received(user), ["Car stuck on the pass"], "the worker must not send a held message");
+    await context.close();
+  });
+
+  test("emergency: a message still waiting a day after it was written asks before it is sent", async () => {
+    const context = await browser.newContext();
+    const realNow = Date.now();
+    await context.clock.setFixedTime(realNow - 25 * 60 * 60 * 1000);
+    const page = await openPage(context);
+    const user = await userOf(page);
+
+    await goOffline(context, page);
+    await write(page, "The bridge is closed");
+    // A day and an hour later, the connection returns.
+    await context.clock.setFixedTime(realNow);
+    await context.setOffline(false);
+    await page.waitForFunction(() => document.querySelector("#connection").dataset.online === "true");
+    await page.waitForSelector("#outbox li[data-status='needs_confirmation']");
+    assert.match(await page.textContent("#outbox li .meta"), /more than a day ago/);
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.deepEqual(await received(user), [], "an old message must not go by itself");
+
+    await page.click("#outbox button[data-action='send']");
+    await waitUntil(async () => (await received(user)).length === 1, "the message after Send");
+    assert.deepEqual(await received(user), ["The bridge is closed"]);
+    await context.close();
+  });
+
+  test("emergency: on a shared browser, another person neither sees nor sends someone else's messages", async () => {
+    const context = await browser.newContext();
+    const page = await openPage(context);
+    const first = await userOf(page);
+    const second = "demo-second-person-0001";
+
+    await goOffline(context, page);
+    await write(page, "From the first person");
+    // Someone else signs in on the same browser.
+    await page.evaluate((id) => localStorage.setItem("holdsend-notes-user", id), second);
+    await page.reload();
+    await page.waitForSelector("body[data-ready='true']");
+    assert.deepEqual(await waiting(page), []);
+
+    await context.setOffline(false);
+    await page.waitForFunction(() => document.querySelector("#connection").dataset.online === "true");
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.deepEqual(await received(first), [], "nothing goes out while another person is signed in");
+    assert.deepEqual(await received(second), []);
+
+    // The first person signs in again: their message goes, under their name.
+    await page.evaluate((id) => localStorage.setItem("holdsend-notes-user", id), first);
+    await page.reload();
+    await page.waitForSelector("body[data-ready='true']");
+    await waitUntil(async () => (await received(first)).length === 1, "the first person's message");
+    assert.deepEqual(await received(first), ["From the first person"]);
+    assert.deepEqual(await received(second), []);
+    await context.close();
+  });
+
+  test("emergency: a message that looks like HTML is shown as text, waiting and received", async () => {
+    const context = await browser.newContext();
+    const page = await openPage(context);
+    const user = await userOf(page);
+    const text = '<img src="x" onerror="window.__ran = true"><b>help</b>';
+
+    await goOffline(context, page);
+    await write(page, text);
+    assert.equal(await page.textContent("#outbox li .note-text"), text);
+    assert.equal(await page.locator("#outbox img, #outbox b").count(), 0);
+
+    await context.setOffline(false);
+    await waitUntil(async () => (await received(user)).length === 1, "the message to arrive");
+    await page.waitForSelector("#received li");
+    assert.equal(await page.textContent("#received li .note-text"), text);
+    assert.equal(await page.locator("#received img, #received b").count(), 0);
+    assert.equal(await page.evaluate(() => window.__ran), undefined);
+    await context.close();
+  });
+
   test("emergency: the page opens offline after a first visit", async () => {
     const context = await browser.newContext();
     const page = await openPage(context);

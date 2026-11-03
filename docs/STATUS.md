@@ -2,10 +2,11 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-02 (service worker cache fixes)
+Last updated: 2026-11-03 (Phase 2 audit closed except a real-device iOS check)
 
 ## Done
 
+- Phase 2 audit closed (2026-11-03), except one item that needs a real iPhone: a clock set back after writing now makes an item ask first (every outbox); `write()` refuses a future `writtenAt`, resets its flags when a store retries `decide`, and matches Unicode forms; the iOS multi-recipient SMS link encodes `+`; four more browser tests (service worker background sync, the one-day rule, two people on one browser, HTML shown as text), each checked to fail on broken code. The SMS hand-off record stays in apps for 0.2 ([audit](audits/2026-10-30-phase2-audit.md)).
 - Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
 - Every package exports `./package.json` (2026-10-29, unreleased).
 - The notes example has an emergency page at `/emergency` (2026-10-29), with five browser tests: the first message goes by itself and later ones wait for Send all, repeated taps are one message, the SMS hand-off can be undone, and the page opens offline.
@@ -41,12 +42,13 @@ Last updated: 2026-11-02 (service worker cache fixes)
 
 ## In progress
 
-- Phase 2, the emergency module (v0.2). The library part is merged. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
+- Phase 2, the emergency module (v0.2): code, docs, example and audit done. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
 ## Next tasks
 
-1. The open items of the Phase 2 audit (`writtenAt` and clock questions first, then the `decide` retry flags and Unicode in `sameWords`, then the missing browser tests), each with a test.
-2. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA).
+1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
+2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
+3. Phase 3: start the design note for one draft edited on two devices.
 
 ## After that
 
