@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-03 (Phase 2 audit closed except a real-device iOS check)
+Last updated: 2026-11-03 (Phase 3 design note proposed)
 
 ## Done
 
@@ -42,13 +42,15 @@ Last updated: 2026-11-03 (Phase 2 audit closed except a real-device iOS check)
 
 ## In progress
 
+- Phase 3 design note for one draft on two devices: [decision 0009](decisions/0009-two-device-drafts.md), proposed, no code yet (2026-11-03).
+
 - Phase 2, the emergency module (v0.2): code, docs, example and audit done. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
 ## Next tasks
 
 1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 3: start the design note for one draft edited on two devices.
+3. Phase 3: build from [decision 0009](decisions/0009-two-device-drafts.md) (proposed): pure log-to-heads function with the scenario suite first, then the server helper, then a separate review.
 
 ## After that
 
