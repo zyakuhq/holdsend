@@ -84,7 +84,7 @@ The wire contract is short and documented in [docs/protocol.md](docs/protocol.md
 
 - Exactly once needs the server's help. HoldSend's client gives every item one key for life; the server must store that key and its result together. `@holdsend/server` does this for Postgres.
 - One case can still publish twice, and HoldSend tells you when it might: if the server refuses a key because it holds a *different* request (for example an earlier version of the same post), a person's "Try again" sends with a new key and `retry()` reports `newKey: true`. Ask before sending in that case.
-- A person's device clock decides the written time. The server bounds it (no more than two minutes ahead, no more than 30 days back) and only ever shows it, never sorts by it.
+- A person's device clock decides the written time. The server bounds it (no more than two minutes ahead, no more than 30 days back) and only ever shows it, never sorts by it. On the device, an item whose written time is later than now (the clock was set back since) asks a person before it is sent, because its real age is unknown.
 - Background sending after the app closes depends on the platform. Some browsers can do it; iOS cannot do it for web apps today. HoldSend will tell the app which case it is in, so it can tell the person the truth.
 - Emergency features in this library are a delivery aid, not an emergency service.
 

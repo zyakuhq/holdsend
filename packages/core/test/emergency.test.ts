@@ -335,7 +335,7 @@ describe("smsLink", () => {
 
   it("uses each platform's form for several recipients", () => {
     expect(smsLink(["+14155550199", "+14155550198"], "Hi")).toBe("sms:+14155550199,+14155550198?body=Hi");
-    expect(smsLink(["+14155550199", "+14155550198"], "Hi", { platform: "ios" })).toBe("sms://open?addresses=+14155550199,+14155550198&body=Hi");
+    expect(smsLink(["+14155550199", "+14155550198"], "Hi", { platform: "ios" })).toBe("sms://open?addresses=%2B14155550199,%2B14155550198&body=Hi");
   });
 
   it("refuses anything that is not a phone number", () => {
@@ -355,5 +355,78 @@ describe("review 2026-10-30", () => {
     expect(r.held).toBe(false);
     await emergency.outbox.flush();
     expect(sentTexts()).toContain("NEW trapped");
+  });
+});
+
+describe("phase 2 audit, open items (2026-11-03)", () => {
+  it("asks before sending a message whose written time is later than now: the clock was set back", async () => {
+    const { clock, emergency, sentTexts } = setup();
+    // Written while the device clock was three hours fast...
+    clock.t = T0 + 3 * HOUR;
+    await emergency.write("Trapped on the roof");
+    // ...then the phone corrects its clock. The message's real age is unknown.
+    clock.t = T0;
+    expect((await emergency.outbox.list())[0]?.status).toBe("needs_confirmation");
+    expect(await emergency.outbox.flush()).toMatchObject({ sent: 0 });
+    expect(sentTexts()).toEqual([]);
+  });
+
+  it("does not ask because of a small clock difference", async () => {
+    const { clock, emergency, sentTexts } = setup();
+    clock.t = T0 + MIN;
+    await emergency.write("Trapped on the roof");
+    clock.t = T0;
+    expect((await emergency.outbox.list())[0]?.status).toBe("waiting");
+    await emergency.outbox.flush();
+    expect(sentTexts()).toEqual(["Trapped on the roof"]);
+  });
+
+  it("applies the clock rule to every outbox, not only emergency messages", async () => {
+    const clock = { t: T0 + 5 * HOUR };
+    const outbox = new Outbox<{ n: number }>({ store: new MemoryStore(), now: () => clock.t, send: async () => ({ type: "sent" }), policy: { claimRenewMs: 0 } });
+    await outbox.add("k", { n: 1 });
+    clock.t = T0;
+    expect((await outbox.list())[0]?.status).toBe("needs_confirmation");
+  });
+
+  it("refuses a written time in the future and treats a small one as now", async () => {
+    const { emergency } = setup();
+    await expect(emergency.write("Need water", { writtenAt: T0 + HOUR })).rejects.toThrow(RangeError);
+    const { item } = await emergency.write("Need water", { writtenAt: T0 + 30 * 1000 });
+    expect(item.writtenAt).toBe(T0);
+    expect(await emergency.outbox.list()).toHaveLength(1);
+  });
+
+  it("only the last run of decide counts when a store runs it twice", async () => {
+    const { emergency } = setup();
+    const first = await emergency.write("Trapped on the roof");
+    // A store that, like a retried transaction, first runs the update on a
+    // stale list (holding the same words) and then on the real one (empty).
+    const store = new MemoryStore<EmergencyMessage>();
+    const staleItems = await emergency.outbox.list().then((entries) => entries.map((e) => e.item));
+    const retrying = {
+      read: () => store.read(),
+      isDurable: () => store.isDurable(),
+      update<T>(fn: (items: OutboxItem<EmergencyMessage>[]) => T): Promise<T> {
+        fn(structuredClone(staleItems));
+        return store.update(fn);
+      },
+    };
+    const other = new EmergencyOutbox({ store: retrying, send: async () => ({ type: "sent" }), now: () => T0, policy: { claimRenewMs: 0 } });
+    const r = await other.write("trapped on the roof");
+    expect(r.duplicate).toBe(false);
+    expect(r.held).toBe(false);
+    expect(r.item.key).not.toBe(first.item.key);
+    expect(await store.read()).toHaveLength(1);
+  });
+
+  it("matches the same words typed with different Unicode forms", async () => {
+    expect(sameWords("Caf\u00e9 closed")).toBe(sameWords("Cafe\u0301 closed"));
+    expect(sameWords("\uff28\uff25\uff2c\uff30")).toBe("help");
+    const { emergency } = setup();
+    await emergency.write("Caf\u00e9 is flooded");
+    const r = await emergency.write("Cafe\u0301 is flooded");
+    expect(r.duplicate).toBe(true);
+    expect(await emergency.outbox.list()).toHaveLength(1);
   });
 });
