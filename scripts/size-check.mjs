@@ -9,6 +9,8 @@ const BUDGETS = [
   { name: "@holdsend/core", entry: "packages/core/dist/index.js", gzipBytes: 5 * 1024 },
   // The emergency subpath, with the parts of core it imports bundled in.
   { name: "@holdsend/core/emergency", entry: "packages/core/dist/emergency.js", gzipBytes: 6 * 1024 },
+  // Drafts: a pure function with no imports.
+  { name: "@holdsend/core/drafts", entry: "packages/core/dist/drafts.js", gzipBytes: 2 * 1024 },
   // Measured with the parts of core it imports bundled in.
   { name: "@holdsend/web", entry: "packages/web/dist/index.js", gzipBytes: 7 * 1024 },
   { name: "@holdsend/react-native", entry: "packages/react-native/dist/index.js", gzipBytes: 4 * 1024 },

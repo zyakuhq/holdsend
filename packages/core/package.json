@@ -18,6 +18,11 @@
       "import": "./dist/emergency.js",
       "default": "./dist/emergency.js"
     },
+    "./drafts": {
+      "types": "./dist/drafts.d.ts",
+      "import": "./dist/drafts.js",
+      "default": "./dist/drafts.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
