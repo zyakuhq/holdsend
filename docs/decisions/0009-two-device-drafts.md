@@ -1,6 +1,6 @@
 # 0009: One draft on two devices (design note, proposed)
 
-Date: 2026-11-03. Status: proposed. Nothing in this note is built yet.
+Date: 2026-11-03. Status: proposed. Step 1 of the next steps is built (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts`. The server helper is not built yet.
 
 ## The problem
 
@@ -52,8 +52,12 @@ What the library will not do: merge text, choose a winner, or order edits by wri
 - Does the web example need a conflict screen in this release, or does the helper plus a guide come first?
 - How long may a conflict stay open before the server stops accepting edits based on old revisions? Leaning to never; storage cost to be measured.
 
+## Built so far
+
+`readDraft(log, draftId?)` returns the open heads, whether the draft is conflicted, the latest head, and any references that point nowhere (reported, never an error). An update's parents are its `baseRev` and the ids it `resolves`; a head is an update nobody else has as a parent. Repeated ids count once. Input order and written time do not change the result. A scenario suite and a fault-injection suite (three devices, lost answers, retries, resolves) check that every accepted edit is reachable from a head and none appears twice; last-writer-wins, double-counting a retry and dropping a stale-base edit each make it fail.
+
 ## Next steps
 
-1. Add the types and a pure function that, given the update log, returns the head and unresolved heads, with the scenario suite above.
+1. (Done) Add the types and a pure function that, given the update log, returns the head and unresolved heads, with the scenario suite above.
 2. Add the server helper over the idempotency store (memory and Postgres).
 3. Review by a separate agent before merge, since this is high stakes.
