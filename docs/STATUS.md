@@ -2,10 +2,11 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-03 (Phase 3 design note proposed)
+Last updated: 2026-11-04 (Phase 3 step 1: readDraft)
 
 ## Done
 
+- Phase 3 step 1 (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts` (616 B gzipped, core budget untouched), a pure function from an update log to the open heads. Two edits on one base stay two heads until a person resolves; a device's own later edit names its first by `baseId`; retries count once. Scenario suite plus a fault-injection suite with an independent oracle, each broken variant (last-writer-wins, retry counted twice, stale-base edit dropped, loose resolve) checked to fail. A separate reviewer found seven issues (ancestorsOf disagreeing with readDraft, input-order dependence, self-conflicts, vacuous tests); all fixed ([#46](https://github.com/zyakuhq/holdsend/pull/46)).
 - Phase 2 audit closed (2026-11-03), except one item that needs a real iPhone: a clock set back after writing now makes an item ask first (every outbox); `write()` refuses a future `writtenAt`, resets its flags when a store retries `decide`, and matches Unicode forms; the iOS multi-recipient SMS link encodes `+`; four more browser tests (service worker background sync, the one-day rule, two people on one browser, HTML shown as text), each checked to fail on broken code. The SMS hand-off record stays in apps for 0.2 ([audit](audits/2026-10-30-phase2-audit.md)).
 - Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
 - Every package exports `./package.json` (2026-10-29, unreleased).
@@ -42,7 +43,7 @@ Last updated: 2026-11-03 (Phase 3 design note proposed)
 
 ## In progress
 
-- Phase 3 design note for one draft on two devices: [decision 0009](decisions/0009-two-device-drafts.md), proposed, no code yet (2026-11-03).
+- Phase 3, one draft on two devices: [decision 0009](decisions/0009-two-device-drafts.md), proposed. The pure reader is built; the server helper (memory and Postgres, with a real race test) is next.
 
 - Phase 2, the emergency module (v0.2): code, docs, example and audit done. The core is at 5,113 of its 5,120-byte budget: new core features need a budget decision or must live in a subpath.
 
@@ -50,7 +51,7 @@ Last updated: 2026-11-03 (Phase 3 design note proposed)
 
 1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 3: build from [decision 0009](decisions/0009-two-device-drafts.md) (proposed): pure log-to-heads function with the scenario suite first, then the server helper, then a separate review.
+3. Phase 3: the server helper from [decision 0009](decisions/0009-two-device-drafts.md): accept every update once per id, assign the arrival revision, return heads, with a real Postgres race test, then a separate review.
 
 ## After that
 
