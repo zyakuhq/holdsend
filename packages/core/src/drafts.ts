@@ -20,6 +20,12 @@ export interface DraftUpdate<T = unknown> {
   rev: number;
   /** The revision the device had seen when it wrote this, or null/undefined for a new draft. */
   baseRev?: number | null;
+  /**
+   * The id of the update this one was written on top of. Preferred over `baseRev`
+   * when set: a device's own second offline edit names its first edit, so the two
+   * are one line, not a conflict.
+   */
+  baseId?: string | null;
   /** A short label set by the app: "edit", "resolve", "restore", "delete" and so on. */
   reason: string;
   /** For a resolving update: the ids of the updates it settles. */
@@ -46,13 +52,12 @@ export interface DraftState<T = unknown> {
   dangling: { id: string; ref: string }[];
 }
 
-/**
- * Reads a draft's log. Updates for other drafts are ignored. Order of the
- * input does not matter. A repeated id keeps the one that arrived first.
- */
-export function readDraft<T = unknown>(log: Iterable<DraftUpdate<T>>, draftId?: string): DraftState<T> {
+type Index<T> = { byId: Map<string, DraftUpdate<T>>; byRev: Map<number, DraftUpdate<T>>; repeats: number };
+
+/** Same-draft updates, ordered by revision then id (so input order never matters), repeats of an id dropped. */
+function index<T>(log: Iterable<DraftUpdate<T>>, draftId?: string): Index<T> {
   const all = [...log].filter((u) => draftId === undefined || u.draftId === draftId);
-  all.sort((a, b) => a.rev - b.rev);
+  all.sort((a, b) => a.rev - b.rev || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const byId = new Map<string, DraftUpdate<T>>();
   const byRev = new Map<number, DraftUpdate<T>>();
   let repeats = 0;
@@ -64,59 +69,65 @@ export function readDraft<T = unknown>(log: Iterable<DraftUpdate<T>>, draftId?: 
     byId.set(u.id, u);
     if (!byRev.has(u.rev)) byRev.set(u.rev, u);
   }
+  return { byId, byRev, repeats };
+}
+
+/** The parents of an update that exist and arrived earlier, plus the references that do not qualify. */
+function parentsOf<T>(u: DraftUpdate<T>, ix: Index<T>): { ok: DraftUpdate<T>[]; bad: string[] } {
+  const refs: [string, DraftUpdate<T> | undefined][] = [];
+  if (u.baseId != null) refs.push([u.baseId, ix.byId.get(u.baseId)]);
+  else if (u.baseRev != null) refs.push([`rev ${u.baseRev}`, ix.byRev.get(u.baseRev)]);
+  for (const id of u.resolves ?? []) refs.push([id, ix.byId.get(id)]);
+  const ok: DraftUpdate<T>[] = [];
+  const bad: string[] = [];
+  // A parent must be a different update that arrived earlier, so no cycle can form.
+  for (const [ref, p] of refs) {
+    if (p && p.rev < u.rev) ok.push(p);
+    else bad.push(ref);
+  }
+  return { ok, bad };
+}
+
+/**
+ * Reads a draft's log. Updates for other drafts are ignored when `draftId` is
+ * given. Order of the input does not matter. A repeated id keeps the one that
+ * arrived first. Updates with the same revision are ordered by id.
+ */
+export function readDraft<T = unknown>(log: Iterable<DraftUpdate<T>>, draftId?: string): DraftState<T> {
+  const ix = index(log, draftId);
   const hasChild = new Set<string>();
   const dangling: { id: string; ref: string }[] = [];
-  for (const u of byId.values()) {
-    // A parent must be a different update that arrived earlier, so no cycle can form.
-    const parents: [string, DraftUpdate<T> | undefined][] = [];
-    if (u.baseRev !== undefined && u.baseRev !== null) parents.push([`rev ${u.baseRev}`, byRev.get(u.baseRev)]);
-    for (const id of u.resolves ?? []) parents.push([id, byId.get(id)]);
-    for (const [ref, p] of parents) {
-      if (p && p.rev < u.rev) hasChild.add(p.id);
-      else dangling.push({ id: u.id, ref });
-    }
+  for (const u of ix.byId.values()) {
+    const { ok, bad } = parentsOf(u, ix);
+    for (const p of ok) hasChild.add(p.id);
+    for (const ref of bad) dangling.push({ id: u.id, ref });
   }
-  const heads = [...byId.values()].filter((u) => !hasChild.has(u.id));
+  const heads = [...ix.byId.values()].filter((u) => !hasChild.has(u.id));
   const conflicted = heads.length > 1;
   return {
     conflicted,
     heads,
     latest: heads.length ? heads[heads.length - 1]! : null,
     unresolved: conflicted ? heads : [],
-    count: byId.size,
-    repeats,
+    count: ix.byId.size,
+    repeats: ix.repeats,
     dangling,
   };
 }
 
 /**
- * Every update that leads to `head` through parents, itself included. A person
- * resolving a conflict can use this to show history. Pure and bounded by the log.
+ * Every update that leads to `head` through parents, itself included, by the
+ * same rules as `readDraft`. Pass `draftId` when the log holds several drafts.
  */
-export function ancestorsOf<T = unknown>(log: Iterable<DraftUpdate<T>>, head: string): DraftUpdate<T>[] {
-  const all = [...log];
-  const byId = new Map<string, DraftUpdate<T>>();
-  const byRev = new Map<number, DraftUpdate<T>>();
-  for (const u of all.sort((a, b) => a.rev - b.rev)) {
-    if (!byId.has(u.id)) byId.set(u.id, u);
-    if (!byRev.has(u.rev)) byRev.set(u.rev, byId.get(u.id)!);
-  }
+export function ancestorsOf<T = unknown>(log: Iterable<DraftUpdate<T>>, head: string, draftId?: string): DraftUpdate<T>[] {
+  const ix = index(log, draftId);
   const seen = new Set<string>();
-  const out: DraftUpdate<T>[] = [];
-  const stack = [byId.get(head)];
+  const stack = [ix.byId.get(head)];
   while (stack.length) {
     const u = stack.pop();
     if (!u || seen.has(u.id)) continue;
     seen.add(u.id);
-    out.push(u);
-    if (u.baseRev !== undefined && u.baseRev !== null) {
-      const p = byRev.get(u.baseRev);
-      if (p && p.rev < u.rev) stack.push(p);
-    }
-    for (const id of u.resolves ?? []) {
-      const p = byId.get(id);
-      if (p && p.rev < u.rev) stack.push(p);
-    }
+    stack.push(...parentsOf(u, ix).ok);
   }
-  return out.sort((a, b) => a.rev - b.rev);
+  return [...seen].map((id) => ix.byId.get(id)!).sort((a, b) => a.rev - b.rev || (a.id < b.id ? -1 : 1));
 }

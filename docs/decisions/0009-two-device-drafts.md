@@ -54,7 +54,7 @@ What the library will not do: merge text, choose a winner, or order edits by wri
 
 ## Built so far
 
-`readDraft(log, draftId?)` returns the open heads, whether the draft is conflicted, the latest head, and any references that point nowhere (reported, never an error). An update's parents are its `baseRev` and the ids it `resolves`; a head is an update nobody else has as a parent. Repeated ids count once. Input order and written time do not change the result. A scenario suite and a fault-injection suite (three devices, lost answers, retries, resolves) check that every accepted edit is reachable from a head and none appears twice; last-writer-wins, double-counting a retry and dropping a stale-base edit each make it fail.
+`readDraft(log, draftId?)` returns the open heads, whether the draft is conflicted, the latest head, and any references that point nowhere (reported, never an error). An update's parents are its `baseId` (or else `baseRev`) and the ids it `resolves`; a head is an update nobody else has as a parent. Repeated ids count once. Input order and written time do not change the result. A scenario suite and a fault-injection suite (three devices, lost answers, retries, resolves) check that every accepted edit is reachable from a head and none appears twice; last-writer-wins, double-counting a retry and dropping a stale-base edit each make it fail.
 
 ## Next steps
 
