@@ -29,7 +29,7 @@ Server side (`@holdsend/server`, a helper over the existing idempotency store):
 - An update is always accepted, never refused for being stale. It gets the next revision number from the server, not from any device clock.
 - If `baseRev` is the current head, the draft moves forward. If it is older, the draft is marked conflicted and lists the heads that are not yet resolved.
 - A `resolve` update closes the heads it names. Only a person triggers it; the library never resolves by itself.
-- The server returns the current head, the unresolved heads and their payloads, so the app can show both versions side by side.
+- The app reads the current head, the unresolved heads and their payloads with `readDraftState`, so the app can show both versions side by side.
 
 What the library will not do: merge text, choose a winner, or order edits by written time. Written time is shown to the person to help them choose, and nothing more.
 
