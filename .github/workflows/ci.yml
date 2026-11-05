@@ -77,7 +77,7 @@ jobs:
           # secretlint-disable-next-line
           HOLDSEND_PG_URL: postgres://postgres:holdsend-ci@localhost:5432/holdsend
         run: |
-          npx vitest run packages/server/test/real-postgres.test.ts packages/server/test/drafts-real-postgres.test.ts --reporter=default --reporter=json --outputFile=pg-results.json
+          npx vitest run --no-file-parallelism packages/server/test/real-postgres.test.ts packages/server/test/drafts-real-postgres.test.ts --reporter=default --reporter=json --outputFile=pg-results.json
           # Fail if the tests were skipped (for example a missing database URL), and leave a visible count.
           node -e 'const r=require("./pg-results.json"); console.log(`::notice title=Real Postgres::${r.numPassedTests} passed, ${r.numPendingTests} skipped`); if (r.numPassedTests < 2 || r.numPendingTests > 0) process.exit(1)'
 
