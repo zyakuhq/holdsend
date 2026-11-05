@@ -39,6 +39,7 @@ export const PAGES = [
     [
       ["Wire protocol", "docs/protocol.md"],
       ["Emergency messages", "docs/emergency.md"],
+      ["One draft on two devices", "docs/drafts.md"],
       ["How it is tested", "docs/testing.md"],
       ["Design notes", "docs/reference-notes.md"],
       ["Status and roadmap", "docs/STATUS.md"],
@@ -57,6 +58,7 @@ export const PAGES = [
       ["0006 React Native store", "docs/decisions/0006-react-native-store-and-scheduler.md"],
       ["0007 Emergency messages", "docs/decisions/0007-emergency-messages.md"],
       ["0008 Flush order", "docs/decisions/0008-flush-order.md"],
+      ["0009 One draft on two devices", "docs/decisions/0009-two-device-drafts.md"],
     ],
   ],
   [

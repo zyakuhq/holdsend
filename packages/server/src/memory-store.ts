@@ -45,6 +45,11 @@ interface MemoryTxState extends MemoryTx {
 
 const state = (tx: MemoryTx) => tx as MemoryTxState;
 
+/** Runs `change` when the transaction commits, and never if it rolls back. For other memory stores that share a transaction with this one. */
+export function onMemoryCommit(tx: MemoryTx, change: () => void): void {
+  state(tx).changes.push(change);
+}
+
 function id(r: RecordId): string {
   return JSON.stringify([r.owner, r.operation, r.key]);
 }

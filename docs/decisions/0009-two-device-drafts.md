@@ -1,6 +1,6 @@
 # 0009: One draft on two devices (design note, proposed)
 
-Date: 2026-11-03. Status: proposed. Step 1 of the next steps is built (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts`. The server helper is not built yet.
+Date: 2026-11-03. Status: proposed. Step 1 of the next steps is built (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts`. The server helper is built too (2026-11-05, unreleased, review pending).
 
 ## The problem
 
@@ -56,8 +56,10 @@ What the library will not do: merge text, choose a winner, or order edits by wri
 
 `readDraft(log, draftId?)` returns the open heads, whether the draft is conflicted, the latest head, and any references that point nowhere (reported, never an error). An update's parents are its `baseId` (or else `baseRev`) and the ids it `resolves`; a head is an update nobody else has as a parent. Repeated ids count once. Input order and written time do not change the result. A scenario suite and a fault-injection suite (three devices, lost answers, retries, resolves) check that every accepted edit is reachable from a head and none appears twice; last-writer-wins, double-counting a retry and dropping a stale-base edit each make it fail.
 
+The server helper (`@holdsend/server`): `acceptDraftUpdate` (a keyed request, key = update id, always accepted when well formed, 400 without a key), `MemoryDraftLog`, `PostgresDraftLog` with `postgresDraftSchema()` (one row per update, unique `(owner, draft_id, id)` and `(owner, draft_id, rev)`, a per-draft advisory lock so revisions follow commit order), and `readDraftState`. This settles the open question on storage: one row per update. Tests run on memory and PGlite; a real-Postgres race test runs in CI. Checked to fail with a stale base refused and with the log's own duplicate guard removed.
+
 ## Next steps
 
 1. (Done) Add the types and a pure function that, given the update log, returns the head and unresolved heads, with the scenario suite above.
-2. Add the server helper over the idempotency store (memory and Postgres).
+2. (Done, review pending) Add the server helper over the idempotency store (memory and Postgres).
 3. Review by a separate agent before merge, since this is high stakes.

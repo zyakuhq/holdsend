@@ -10,7 +10,7 @@ export {
   type StoredResult,
 } from "./types.js";
 export { FINGERPRINT_VERSION, canonicalJson, hashRequest } from "./hash.js";
-export { MemoryIdempotencyStore, type MemoryTx } from "./memory-store.js";
+export { MemoryIdempotencyStore, onMemoryCommit, type MemoryTx } from "./memory-store.js";
 export {
   PostgresIdempotencyStore,
   pgPoolTransaction,
@@ -30,3 +30,15 @@ export {
   type IdempotentAnswer,
   type KeyRead,
 } from "./handler.js";
+export {
+  MemoryDraftLog,
+  PostgresDraftLog,
+  acceptDraftUpdate,
+  checkDraftUpdate,
+  postgresDraftSchema,
+  readDraftState,
+  type AcceptDraftUpdateOptions,
+  type DraftAccepted,
+  type DraftLog,
+  type NewDraftUpdate,
+} from "./drafts.js";
