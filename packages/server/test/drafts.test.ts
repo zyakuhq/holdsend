@@ -87,11 +87,17 @@ describe.each(setups)("draft updates, %s", (_name, setup) => {
 
   it("rejects malformed updates without storing anything", async () => {
     const s = await setup();
-    for (const bad of [{ reason: "edit" }, { draftId: "d", reason: "" }, { draftId: "d", reason: "e", baseRev: 0 }, { draftId: "d", reason: "e", resolves: [1] }, { draftId: "d", reason: "e", baseRev: 1.5 }]) {
+    for (const bad of [{ reason: "edit" }, { draftId: "d", reason: "" }, { draftId: "d", reason: "e", baseRev: 0 }, { draftId: "d", reason: "e", resolves: [1] }, { draftId: "d", reason: "e", baseRev: 1.5 }, { draftId: "d", reason: "e", baseRev: 3_000_000_000 }, { draftId: "d", reason: "e", payload: { t: "a\u0000b" } }, { draftId: "d", reason: "e", payload: "\ud800" }, { draftId: "d\ud800", reason: "e" }, { draftId: "d", reason: "e", payload: "x".repeat(300_000) }]) {
       const r = await send(s, "u-bad-0001", bad as unknown as NewDraftUpdate);
       expect(r.status).toBe(400);
     }
     expect((await s.log.list("person-a", "d")).length).toBe(0);
+  });
+
+  it("memory and Postgres store the same shape, without unknown fields", async () => {
+    const s = await setup();
+    await send(s, "u-0000001", { draftId: "d1", reason: "edit", baseRev: null, resolves: [], extra: "x" } as NewDraftUpdate);
+    expect((await s.log.list("person-a", "d1"))[0]).toEqual({ id: "u-0000001", draftId: "d1", rev: 1, reason: "edit" });
   });
 
   it("keeps two people's drafts apart", async () => {

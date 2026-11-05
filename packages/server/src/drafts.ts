@@ -34,24 +34,55 @@ export interface DraftLog<Tx> {
 
 const MAX_RESOLVES = 100;
 const MAX_TEXT = 200;
+const MAX_PAYLOAD_BYTES = 256 * 1024;
+const MAX_INT4 = 2147483647;
+
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+const wellFormed = (v: string): boolean => !LONE_SURROGATE.test(v);
+
+/** True when a value is plain JSON that Postgres JSONB can store: no NUL, no lone surrogate, and every number finite. */
+function storableJson(v: unknown, depth = 0): boolean {
+  if (depth > 64) return false;
+  if (v === null || typeof v === "boolean") return true;
+  if (typeof v === "number") return Number.isFinite(v);
+  if (typeof v === "string") return !v.includes("\u0000") && wellFormed(v);
+  if (Array.isArray(v)) return v.every((x) => storableJson(x, depth + 1));
+  if (typeof v === "object") return Object.entries(v as object).every(([k, x]) => storableJson(k, depth + 1) && storableJson(x, depth + 1));
+  return false;
+}
 
 /** Returns a message when the update is malformed, or null when it is fine. */
 export function checkDraftUpdate(u: unknown): string | null {
   if (typeof u !== "object" || u === null || Array.isArray(u)) return "update must be an object";
   const x = u as Record<string, unknown>;
-  const text = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= MAX_TEXT && !v.includes("\u0000");
+  const text = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= MAX_TEXT && !v.includes("\u0000") && wellFormed(v);
   if (!text(x.draftId)) return "draftId must be a short non-empty string";
   if (!text(x.reason)) return "reason must be a short non-empty string";
   for (const k of ["baseRev"] as const) {
     const v = x[k];
-    if (v != null && !(typeof v === "number" && Number.isSafeInteger(v) && v >= 1)) return `${k} must be a positive integer`;
+    if (v != null && !(typeof v === "number" && Number.isSafeInteger(v) && v >= 1 && v <= MAX_INT4)) return `${k} must be a positive integer below 2147483648`;
   }
   if (x.baseId != null && !text(x.baseId)) return "baseId must be a short non-empty string";
   if (x.resolves !== undefined) {
     if (!Array.isArray(x.resolves) || x.resolves.length > MAX_RESOLVES || !x.resolves.every(text)) return `resolves must be a list of up to ${MAX_RESOLVES} ids`;
   }
   if (x.writtenAt != null && !(typeof x.writtenAt === "number" && Number.isSafeInteger(x.writtenAt) && x.writtenAt >= 0)) return "writtenAt must be epoch milliseconds";
+  if (x.payload !== undefined) {
+    if (!storableJson(x.payload)) return "payload must be plain JSON without NUL characters or lone surrogates";
+    if (JSON.stringify(x.payload).length > MAX_PAYLOAD_BYTES) return `payload must be at most ${MAX_PAYLOAD_BYTES} characters of JSON`;
+  }
   return null;
+}
+
+/** Only the known fields, the same shape Postgres returns, so memory and Postgres agree. */
+function normalise(u: NewDraftUpdate & { id: string }, rev: number): DraftUpdate {
+  const out: DraftUpdate = { id: u.id, draftId: u.draftId, rev, reason: u.reason };
+  if (u.baseRev != null) out.baseRev = u.baseRev;
+  if (u.baseId != null) out.baseId = u.baseId;
+  if (u.resolves?.length) out.resolves = [...u.resolves];
+  if (u.writtenAt != null) out.writtenAt = u.writtenAt;
+  if (u.payload !== undefined && u.payload !== null) out.payload = clone(u.payload);
+  return out;
 }
 
 function clone<T>(v: T): T {
@@ -73,7 +104,7 @@ export class MemoryDraftLog implements DraftLog<MemoryTx> {
     // Revisions come from a counter taken now, so two open transactions never share one. A rolled-back write leaves a gap, which is fine.
     const rev = (this.counters.get(k) ?? 0) + 1;
     this.counters.set(k, rev);
-    const stored: DraftUpdate = { ...clone(update), rev };
+    const stored = normalise(update, rev);
     onMemoryCommit(tx, () => {
       const list = this.logs.get(k) ?? [];
       if (!list.some((u) => u.id === stored.id)) list.push(stored);
@@ -150,7 +181,8 @@ function fromRow(r: DraftRow): DraftUpdate {
 /**
  * A Postgres draft log. Takes a transaction-scoped advisory lock per draft, so
  * two requests for one draft get distinct, increasing revisions in commit
- * order, and neither is lost.
+ * order, and neither is lost. Needs the default READ COMMITTED level: at
+ * REPEATABLE READ or SERIALIZABLE the snapshot is taken before the lock.
  */
 export class PostgresDraftLog implements DraftLog<Queryable> {
   private readonly table: string;
