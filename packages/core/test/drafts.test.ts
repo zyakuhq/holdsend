@@ -301,3 +301,46 @@ describe("no edit is silently lost (fault injection)", () => {
     expect(() => run(sloppy)).toThrow();
   });
 });
+
+import { editLinks, resolveLinks } from "../src/drafts.js";
+
+describe("device-side links", () => {
+  it("a new draft has no base", () => {
+    expect(editLinks(readDraft([], D))).toEqual({ baseId: null, baseRev: null });
+    expect(resolveLinks(readDraft([], D))).toEqual({ baseId: null, baseRev: null, resolves: [] });
+  });
+
+  it("an edit sits on the latest head, or on this device's own unsent edit", () => {
+    const a = u(1, null);
+    const s = readDraft([a], D);
+    expect(editLinks(s)).toEqual({ baseId: a.id, baseRev: 1 });
+    expect(editLinks(s, { id: "mine-1" })).toEqual({ baseId: "mine-1", baseRev: null });
+  });
+
+  it("two offline edits from one device stay one line", () => {
+    const a = u(1, null);
+    const first = u(2, null, { baseId: editLinks(readDraft([a], D)).baseId });
+    const second = u(3, null, { baseId: editLinks(readDraft([a], D), first).baseId });
+    expect(readDraft([a, first, second], D).conflicted).toBe(false);
+  });
+
+  it("an edit does not close another head, a resolve closes the others", () => {
+    const a = u(1, null);
+    const phone = u(2, 1, { baseId: a.id });
+    const laptop = u(3, 1, { baseId: a.id });
+    const s = readDraft([a, phone, laptop], D);
+    const edit = u(4, null, { ...editLinks(s) });
+    expect(readDraft([a, phone, laptop, edit], D).conflicted).toBe(true);
+    const links = resolveLinks(s, phone.id);
+    expect(links).toEqual({ baseId: phone.id, baseRev: 2, resolves: [laptop.id] });
+    const merged = u(5, null, { ...links, reason: "resolve" });
+    const after = readDraft([a, phone, laptop, merged], D);
+    expect(after.conflicted).toBe(false);
+    expect(after.heads.map((h) => h.id)).toEqual([merged.id]);
+  });
+
+  it("an unknown chosen id resolves nothing", () => {
+    const a = u(1, null);
+    expect(resolveLinks(readDraft([a], D), "nope")).toEqual({ baseId: null, baseRev: null, resolves: [] });
+  });
+});

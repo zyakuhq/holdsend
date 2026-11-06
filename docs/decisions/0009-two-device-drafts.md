@@ -62,4 +62,5 @@ The server helper (`@holdsend/server`): `acceptDraftUpdate` (a keyed request, ke
 
 1. (Done) Add the types and a pure function that, given the update log, returns the head and unresolved heads, with the scenario suite above.
 2. (Done, review pending) Add the server helper over the idempotency store (memory and Postgres).
-3. Review by a separate agent before merge, since this is high stakes.
+3. (Done 2026-11-06) Device-side helpers `editLinks` and `resolveLinks`, pure functions in `@holdsend/core/drafts`.
+4. Review by a separate agent before merge, since this is high stakes.

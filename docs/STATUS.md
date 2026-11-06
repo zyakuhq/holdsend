@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-05 (Phase 3 server draft log)
+Last updated: 2026-11-06 (Phase 3 device-side draft helpers)
 
 ## Done
 
@@ -42,7 +42,7 @@ Last updated: 2026-11-05 (Phase 3 server draft log)
 
 ## In progress
 
-- Phase 3, one draft on two devices (unreleased): `readDraft` (2026-11-04) and the server helper (2026-11-05: `acceptDraftUpdate`, `MemoryDraftLog`, `PostgresDraftLog`), reviewed by a separate agent, findings fixed ([guide](drafts.md), [decision 0009](decisions/0009-two-device-drafts.md)). Before 0.3, `@holdsend/server` must depend on a core release that has `./drafts`. Still to build: a device-side helper for `baseRev`, `baseId` and `resolves`, a conflict screen in the example, and an audit.
+- Phase 3, one draft on two devices (unreleased): `readDraft` (2026-11-04) and the server helper (2026-11-05: `acceptDraftUpdate`, `MemoryDraftLog`, `PostgresDraftLog`), reviewed by a separate agent, findings fixed ([guide](drafts.md), [decision 0009](decisions/0009-two-device-drafts.md)). Before 0.3, `@holdsend/server` must depend on a core release that has `./drafts`. Device-side helpers `editLinks` and `resolveLinks` added 2026-11-06 (small pure functions, not yet reviewed by a separate agent). Still to build: a conflict screen in the example, and an audit.
 
 - Phase 3 design note for one draft on two devices: [decision 0009](decisions/0009-two-device-drafts.md), proposed, no code yet (2026-11-03).
 
@@ -52,7 +52,7 @@ Last updated: 2026-11-05 (Phase 3 server draft log)
 
 1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 3: device-side helper and a conflict screen in the example, then an audit; then the Android background task.
+3. Phase 3: a conflict screen in the example (uses `readDraft`, `editLinks`, `resolveLinks`), then an audit of the whole drafts feature; then the Android background task.
 
 ## After that
 
