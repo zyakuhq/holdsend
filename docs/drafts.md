@@ -36,10 +36,26 @@ For Postgres, run `postgresDraftSchema()` once and use `new PostgresDraftLog({ d
 - Postgres needs the default READ COMMITTED transaction level (`pgPoolTransaction` uses it).
 - `readDraftState` loads the whole log of one draft, so keep drafts to a sensible number of edits.
 
+## On the device
+
+`editLinks` and `resolveLinks` from `@holdsend/core/drafts` build the link fields, so an app does not hand-write them:
+
+```ts
+import { readDraft, editLinks, resolveLinks } from "@holdsend/core/drafts";
+
+const state = readDraft(logFromServer, "d1");
+// A normal edit. Pass this device's own latest unsent update as `mine`.
+const links = editLinks(state, lastOwnUpdate);
+// A person settled a conflict: base on their chosen head, close the others.
+const settle = resolveLinks(state, chosenId); // { baseId, baseRev, resolves }
+```
+
+`editLinks` never closes a head. `resolveLinks` does, so call it only after a person has seen the heads side by side.
+
 ## Limits
 
 - Two edits to different parts of one draft still count as a conflict. A person confirms.
 - Revisions follow arrival at the server, not the order people wrote. On Postgres they follow commit order; the in-memory log (tests, one process) numbers them when the write starts, so they can differ from commit order there.
 - A conflict stays open until a person resolves it. Show conflicted drafts in your app.
 - Every update is kept, so storage grows with edits. Nothing prunes it yet.
-- No conflict screen is shipped yet, and no device-side helper to build `baseRev` and `resolves`; that is next.
+- No conflict screen is shipped yet; that is next.

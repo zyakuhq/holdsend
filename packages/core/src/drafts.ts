@@ -131,3 +131,35 @@ export function ancestorsOf<T = unknown>(log: Iterable<DraftUpdate<T>>, head: st
   }
   return [...seen].map((id) => ix.byId.get(id)!).sort((a, b) => a.rev - b.rev || (a.id < b.id ? -1 : 1));
 }
+
+/** The fields a device sets on a new update. The app adds `id`, `draftId`, `reason`, `writtenAt` and `payload`. */
+export interface DraftLinks {
+  baseId: string | null;
+  baseRev: number | null;
+  resolves?: string[];
+}
+
+/**
+ * Links for a normal edit. `mine` is this device's own latest update that the
+ * server may not have shown yet (an edit still waiting in the outbox); naming it
+ * keeps a device's own offline edits one line instead of a false conflict. With
+ * none, the edit sits on the latest head the device has seen. It does not close
+ * any other head: only `resolveLinks` does.
+ */
+export function editLinks<T>(state: DraftState<T>, mine?: { id: string; rev?: number | null }): DraftLinks {
+  if (mine) return { baseId: mine.id, baseRev: mine.rev ?? null };
+  const l = state.latest;
+  return l ? { baseId: l.id, baseRev: l.rev } : { baseId: null, baseRev: null };
+}
+
+/**
+ * Links for an update a person writes to settle a conflict: it sits on the
+ * chosen head (default: the latest) and resolves every other open head. Call
+ * it only after a person has seen the heads side by side and chosen or
+ * combined them. With no conflict it resolves nothing.
+ */
+export function resolveLinks<T>(state: DraftState<T>, chosenId?: string): DraftLinks {
+  const base = chosenId === undefined ? state.latest : state.heads.find((h) => h.id === chosenId) ?? null;
+  if (!base) return { baseId: null, baseRev: null, resolves: [] };
+  return { baseId: base.id, baseRev: base.rev, resolves: state.heads.filter((h) => h.id !== base.id).map((h) => h.id) };
+}
