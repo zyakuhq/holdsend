@@ -7,7 +7,15 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import express from "express";
-import { PostgresIdempotencyStore, handleIdempotent, pgPoolTransaction, postgresSchema } from "@holdsend/server";
+import {
+  PostgresDraftLog,
+  PostgresIdempotencyStore,
+  acceptDraftUpdate,
+  handleIdempotent,
+  pgPoolTransaction,
+  postgresDraftSchema,
+  postgresSchema,
+} from "@holdsend/server";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -33,6 +41,8 @@ CREATE INDEX IF NOT EXISTS emergency_owner_arrived_idx ON emergency_messages (ow
 const DEMO_USER = /^[A-Za-z0-9-]{8,64}$/;
 const MAX_NOTE = 2000;
 const MAX_EMERGENCY = 1000;
+const MAX_DRAFT = 2000;
+const DRAFT_ID = /^[A-Za-z0-9-]{1,64}$/;
 
 async function openDatabase(databaseUrl) {
   if (databaseUrl) {
@@ -67,12 +77,13 @@ async function bundleClient(pageEntry, development) {
     });
     return result.outputFiles[0].text;
   };
-  const [app, emergency, sw] = await Promise.all([
+  const [app, emergency, drafts, sw] = await Promise.all([
     bundle(pageEntry, "esm"),
     bundle(here("./emergency-client.mjs"), "esm"),
+    bundle(here("./drafts-client.mjs"), "esm"),
     bundle(here("./sw.mjs"), "iife"),
   ]);
-  return { "app.js": app, "emergency.js": emergency, "sw.js": sw };
+  return { "app.js": app, "emergency.js": emergency, "drafts.js": drafts, "sw.js": sw };
 }
 
 function noteJson(row) {
@@ -83,21 +94,23 @@ function noteJson(row) {
 export async function createNotesApp(options = {}) {
   const database = await openDatabase(options.databaseUrl);
   // One statement per query: PGlite's query() takes a single statement.
-  for (const statement of `${postgresSchema()}\n${NOTES_SCHEMA}`.split(";").map((s) => s.trim()).filter(Boolean)) {
+  for (const statement of `${postgresSchema()}\n${NOTES_SCHEMA}\n${postgresDraftSchema()}`.split(";").map((s) => s.trim()).filter(Boolean)) {
     await database.db.query(statement);
   }
   const store = new PostgresIdempotencyStore({ db: database.db, transaction: database.transaction });
+  const draftLog = new PostgresDraftLog({ db: database.db });
 
   // options.page lets another example serve its own page with this server.
   // options.staticDir serves an app that was built elsewhere (the Expo web
   // export); otherwise the page is bundled here.
   const pageFiles = options.page ?? { entry: here("./client.mjs"), html: here("../public/index.html") };
-  const [client, indexHtml, emergencyHtml] = options.staticDir
-    ? [null, null, null]
+  const [client, indexHtml, emergencyHtml, draftsHtml] = options.staticDir
+    ? [null, null, null, null]
     : await Promise.all([
         bundleClient(pageFiles.entry, options.development === true),
         readFile(pageFiles.html, "utf8"),
         readFile(here("../public/emergency.html"), "utf8"),
+        readFile(here("../public/drafts.html"), "utf8"),
       ]);
   // Owners who asked to lose the answer to their next note (the demo button).
   const loseNextAnswer = new Set();
@@ -118,6 +131,8 @@ export async function createNotesApp(options = {}) {
     app.get("/app.js", page("text/javascript; charset=utf-8", client["app.js"]));
     app.get("/emergency", page("text/html; charset=utf-8", emergencyHtml));
     app.get("/emergency.js", page("text/javascript; charset=utf-8", client["emergency.js"]));
+    app.get("/drafts", page("text/html; charset=utf-8", draftsHtml));
+    app.get("/drafts.js", page("text/javascript; charset=utf-8", client["drafts.js"]));
     app.get("/sw.js", page("text/javascript; charset=utf-8", client["sw.js"]));
   }
 
@@ -223,6 +238,37 @@ export async function createNotesApp(options = {}) {
         return { status: 201, body: { id: String(rows[0].id) }, resourceRef: String(rows[0].id) };
       },
     });
+    res.status(answer.status).set(answer.headers).json(answer.body);
+  });
+
+  // One draft on two devices (decision 0009). Every edit is kept; the server
+  // never merges and never refuses an edit for being stale. The page reads the
+  // log and shows a person every open version when there is more than one.
+  app.get("/api/drafts/:id", async (req, res) => {
+    if (!DRAFT_ID.test(req.params.id)) return res.status(404).json({ code: "not_found", message: "No such draft." });
+    const updates = await draftLog.list(res.locals.owner, req.params.id);
+    res.set("cache-control", "no-store").json({ updates });
+  });
+
+  app.put("/api/drafts/:id", async (req, res) => {
+    const owner = res.locals.owner;
+    const id = req.params.id;
+    const body = req.body ?? {};
+    const text = body.payload?.text;
+    if (!DRAFT_ID.test(id) || typeof text !== "string" || text.length > MAX_DRAFT) {
+      return res.status(400).json({ code: "invalid_draft", message: `A draft is at most ${MAX_DRAFT} characters.` });
+    }
+    // Only known fields are passed on; the owner comes from the session.
+    const update = {
+      draftId: id,
+      baseRev: body.baseRev ?? null,
+      baseId: body.baseId ?? null,
+      reason: body.reason,
+      ...(body.resolves === undefined ? {} : { resolves: body.resolves }),
+      ...(body.writtenAt === undefined ? {} : { writtenAt: body.writtenAt }),
+      payload: { text },
+    };
+    const answer = await acceptDraftUpdate({ store, log: draftLog, owner, headers: req.headers, update });
     res.status(answer.status).set(answer.headers).json(answer.body);
   });
 

@@ -33,3 +33,19 @@ export async function sendEmergency(item, { headers, signal }) {
   const body = await res.json().catch(() => ({}));
   return classifyResponse(res.status, body.code, body.message);
 }
+
+/** The drafts queue: its own database and sender lock. */
+export const DRAFTS_NAME = `${OUTBOX_NAME}-drafts`;
+export const DRAFTS_LOCK = `${DRAFTS_NAME}-sender`;
+
+/** Sends one draft update. The outbox key is the update's id. */
+export async function sendDraftUpdate(item, { headers, signal }) {
+  const res = await fetch(`/api/drafts/${encodeURIComponent(item.payload.draftId)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", ...headers, "x-demo-user": item.owner },
+    body: JSON.stringify(item.payload),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  return classifyResponse(res.status, body.code ?? body.error, body.message);
+}

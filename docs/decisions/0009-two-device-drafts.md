@@ -64,3 +64,6 @@ The server helper (`@holdsend/server`): `acceptDraftUpdate` (a keyed request, ke
 2. (Done, review pending) Add the server helper over the idempotency store (memory and Postgres).
 3. (Done 2026-11-06) Device-side helpers `editLinks` and `resolveLinks`, pure functions in `@holdsend/core/drafts`.
 4. Review by a separate agent before merge, since this is high stakes.
+
+5. (Done 2026-11-07) A conflict screen in the notes example (`/drafts`), with three browser tests (two offline edits from one device stay one line; two devices conflict, a person keeps one version and nothing is lost; a person writes a version using both), each checked to fail when `editLinks` ignores the device's own unsent edit or `resolveLinks` closes nothing. Still to do: an audit of the whole drafts feature.
+The review found a window where a sent edit has left the outbox but the log is not read again yet; the page now remembers its own unconfirmed edits for that window. The browser test for quick online saves passes with and without that fix (the window is too short to hit in a test), so it is a guard, not proof.
