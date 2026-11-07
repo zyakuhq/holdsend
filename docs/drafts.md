@@ -58,4 +58,4 @@ const settle = resolveLinks(state, chosenId); // { baseId, baseRev, resolves }
 - Revisions follow arrival at the server, not the order people wrote. On Postgres they follow commit order; the in-memory log (tests, one process) numbers them when the write starts, so they can differ from commit order there.
 - A conflict stays open until a person resolves it. Show conflicted drafts in your app.
 - Every update is kept, so storage grows with edits. Nothing prunes it yet.
-- No conflict screen is shipped yet; that is next.
+- The conflict screen is an example, not a library component: see `/drafts` in [examples/notes](../examples/notes) (`src/drafts-client.mjs`). It shows every open version side by side, lets a person keep one or write a version using both, and refuses to settle while this device still has unsent edits. It sends only while the page is open (no background sending for drafts yet).
