@@ -51,6 +51,16 @@ function storableJson(v: unknown, depth = 0): boolean {
   return false;
 }
 
+/** Bytes of a well-formed string in UTF-8. */
+function utf8Length(v: string): number {
+  let n = 0;
+  for (const ch of v) {
+    const c = ch.codePointAt(0)!;
+    n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+  return n;
+}
+
 /** Returns a message when the update is malformed, or null when it is fine. */
 export function checkDraftUpdate(u: unknown): string | null {
   if (typeof u !== "object" || u === null || Array.isArray(u)) return "update must be an object";
@@ -66,10 +76,10 @@ export function checkDraftUpdate(u: unknown): string | null {
   if (x.resolves !== undefined) {
     if (!Array.isArray(x.resolves) || x.resolves.length > MAX_RESOLVES || !x.resolves.every(text)) return `resolves must be a list of up to ${MAX_RESOLVES} ids`;
   }
-  if (x.writtenAt != null && !(typeof x.writtenAt === "number" && Number.isSafeInteger(x.writtenAt) && x.writtenAt >= 0)) return "writtenAt must be epoch milliseconds";
+  if (x.writtenAt != null && !(typeof x.writtenAt === "number" && Number.isSafeInteger(x.writtenAt) && x.writtenAt >= 0 && x.writtenAt <= 8.64e15)) return "writtenAt must be epoch milliseconds";
   if (x.payload !== undefined) {
     if (!storableJson(x.payload)) return "payload must be plain JSON without NUL characters or lone surrogates";
-    if (JSON.stringify(x.payload).length > MAX_PAYLOAD_BYTES) return `payload must be at most ${MAX_PAYLOAD_BYTES} characters of JSON`;
+    if (utf8Length(JSON.stringify(x.payload)) > MAX_PAYLOAD_BYTES) return `payload must be at most ${MAX_PAYLOAD_BYTES} bytes of JSON`;
   }
   return null;
 }

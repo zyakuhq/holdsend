@@ -2,6 +2,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import {
+  checkDraftUpdate,
   MemoryDraftLog,
   MemoryIdempotencyStore,
   PostgresDraftLog,
@@ -136,5 +137,16 @@ describe.each(setups)("draft updates, %s", (_name, setup) => {
     const [a, b] = [await add(), await add()];
     expect(b.rev).toBe(a.rev);
     expect((await s.log.list("person-a", "d1")).length).toBe(1);
+  });
+});
+
+describe("draft update limits (audit)", () => {
+  it("counts the payload in bytes, not characters", () => {
+    const base = { draftId: "d", reason: "edit" };
+    expect(checkDraftUpdate({ ...base, payload: { t: "€".repeat(100_000) } })).toMatch(/bytes/);
+    expect(checkDraftUpdate({ ...base, payload: { t: "a".repeat(100_000) } })).toBeNull();
+  });
+  it("refuses a writtenAt no date can show", () => {
+    expect(checkDraftUpdate({ draftId: "d", reason: "edit", writtenAt: Number.MAX_SAFE_INTEGER })).toMatch(/epoch/);
   });
 });

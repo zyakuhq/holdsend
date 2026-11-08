@@ -32,7 +32,7 @@ For Postgres, run `postgresDraftSchema()` once and use `new PostgresDraftLog({ d
 
 - Send one device's updates one at a time, in order, and give each `baseId` (the update it was written on). Updates sent at once can arrive out of order and show up as a false conflict (reported, never lost).
 - Keep `writtenAt` the same on every retry of an update, because it is part of what the key stands for. It is for display only; it is not checked against the clock.
-- A payload is plain JSON up to 256 KiB, without NUL characters or lone surrogates. Larger or malformed updates are answered 400 and not stored. Set your own request size limit too.
+- A payload is plain JSON up to 256 KiB (counted in UTF-8 bytes), without NUL characters or lone surrogates. Larger or malformed updates are answered 400 and not stored. Set your own request size limit too.
 - Postgres needs the default READ COMMITTED transaction level (`pgPoolTransaction` uses it).
 - `readDraftState` loads the whole log of one draft, so keep drafts to a sensible number of edits.
 
@@ -45,12 +45,12 @@ import { readDraft, editLinks, resolveLinks } from "@holdsend/core/drafts";
 
 const state = readDraft(logFromServer, "d1");
 // A normal edit. Pass this device's own latest unsent update as `mine`.
-const links = editLinks(state, lastOwnUpdate);
+const links = editLinks(state, lastOwnUpdate); // lastOwnUpdate: your unsent edit; ignored once the log shows it
 // A person settled a conflict: base on their chosen head, close the others.
-const settle = resolveLinks(state, chosenId); // { baseId, baseRev, resolves }
+const settle = resolveLinks(state, chosenId, idsOnScreen); // { baseId, baseRev, resolves }
 ```
 
-`editLinks` never closes a head. `resolveLinks` does, so call it only after a person has seen the heads side by side.
+`editLinks` never closes a head. `resolveLinks` does, so call it only after a person has seen the heads side by side, and pass the ids that were on screen so a head that arrived meanwhile stays open. A `chosenId` that is not an open head throws.
 
 ## Limits
 

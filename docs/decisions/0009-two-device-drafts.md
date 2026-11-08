@@ -1,6 +1,6 @@
 # 0009: One draft on two devices (design note, proposed)
 
-Date: 2026-11-03. Status: proposed. Step 1 of the next steps is built (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts`. The server helper is built too (2026-11-05, unreleased, review pending).
+Date: 2026-11-03. Status: accepted (built, unreleased). Step 1 of the next steps is built (2026-11-04, unreleased): `readDraft` and `ancestorsOf` in `@holdsend/core/drafts`. The server helper is built too (2026-11-05, unreleased, reviewed).
 
 ## The problem
 
@@ -67,3 +67,6 @@ The server helper (`@holdsend/server`): `acceptDraftUpdate` (a keyed request, ke
 
 5. (Done 2026-11-07) A conflict screen in the notes example (`/drafts`), with three browser tests (two offline edits from one device stay one line; two devices conflict, a person keeps one version and nothing is lost; a person writes a version using both), each checked to fail when `editLinks` ignores the device's own unsent edit or `resolveLinks` closes nothing. Still to do: an audit of the whole drafts feature.
 The review found a window where a sent edit has left the outbox but the log is not read again yet; the page now remembers its own unconfirmed edits for that window. The browser test for quick online saves passes with and without that fix (the window is too short to hit in a test), so it is a guard, not proof.
+
+## Whole-feature audit (2026-11-08)
+A separate reviewer audited the whole feature. Fixed, each with a test that fails on the old code: `resolveLinks` closes only heads the person saw and throws on a non-head; a base id that names nothing falls back to the base revision; `editLinks` ignores `mine` once the log shows it; the 256 KiB cap counts bytes; `writtenAt` is capped at the largest date; the example finds its own unsent edit in the outbox after a reload. Left as documented: references to unknown ids are reported as `dangling`, not refused; `readDraft` without `draftId` mixes drafts (pass it); Postgres needs READ COMMITTED and does not check it.

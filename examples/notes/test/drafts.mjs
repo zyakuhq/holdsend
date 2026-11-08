@@ -28,8 +28,8 @@ export function runDraftScenarios() {
   });
 
   /** A device signed in as `user` (a made-up id, as the demo does). */
-  async function device(user) {
-    const context = await browser.newContext();
+  async function device(user, options = {}) {
+    const context = await browser.newContext(options);
     await context.addInitScript((id) => {
       if (!localStorage.getItem("holdsend-notes-user")) localStorage.setItem("holdsend-notes-user", id);
     }, user);
@@ -85,6 +85,25 @@ export function runDraftScenarios() {
     const log = await serverLog(user);
     assert.equal(log[1].baseId, log[0].id, "the second edit sits on the first");
     await a.page.waitForFunction(() => document.querySelector("#text").value === "second offline edit");
+    assert.equal(await conflictVisible(a.page), false);
+    await a.context.close();
+  });
+
+  test("drafts: an edit after a reload sits on the unsent edit from before it", async () => {
+    const user = newUser();
+    const a = await device(user, { serviceWorkers: "block" }); // so the route below sees every send
+    // Sends fail (the server is unreachable) but the page can still reload.
+    const block = (route) => (route.request().method() !== "GET" ? route.abort() : route.continue());
+    await a.context.route("**/api/drafts**", block);
+    await save(a.page, "unsent before reload");
+    await a.page.reload();
+    await a.page.waitForSelector("body[data-ready='true']");
+    await save(a.page, "edit after reload");
+    await a.context.unroute("**/api/drafts**", block);
+    await a.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await waitUntil(async () => (await serverLog(user)).length === 2, "both edits on the server");
+    const log = await serverLog(user);
+    assert.equal(log[1].baseId, log[0].id, "the edit after the reload sits on the first");
     assert.equal(await conflictVisible(a.page), false);
     await a.context.close();
   });

@@ -44,6 +44,8 @@ export interface DraftState<T = unknown> {
   latest: DraftUpdate<T> | null;
   /** The heads to show side by side: all of them when conflicted, none otherwise. */
   unresolved: DraftUpdate<T>[];
+  /** The ids of every update read. */
+  ids: ReadonlySet<string>;
   /** Updates read, after dropping repeats of an id. */
   count: number;
   /** Updates dropped because an earlier one had the same id (a retry). */
@@ -75,8 +77,10 @@ function index<T>(log: Iterable<DraftUpdate<T>>, draftId?: string): Index<T> {
 /** The parents of an update that exist and arrived earlier, plus the references that do not qualify. */
 function parentsOf<T>(u: DraftUpdate<T>, ix: Index<T>): { ok: DraftUpdate<T>[]; bad: string[] } {
   const refs: [string, DraftUpdate<T> | undefined][] = [];
-  if (u.baseId != null) refs.push([u.baseId, ix.byId.get(u.baseId)]);
-  else if (u.baseRev != null) refs.push([`rev ${u.baseRev}`, ix.byRev.get(u.baseRev)]);
+  const byId = u.baseId != null ? ix.byId.get(u.baseId) : undefined;
+  if (u.baseId != null) refs.push([u.baseId, byId]);
+  // A base id that names nothing usable falls back to the base revision, so a lost id is not a false second root.
+  if (u.baseRev != null && !(byId && byId.rev < u.rev)) refs.push([`rev ${u.baseRev}`, ix.byRev.get(u.baseRev)]);
   for (const id of u.resolves ?? []) refs.push([id, ix.byId.get(id)]);
   const ok: DraftUpdate<T>[] = [];
   const bad: string[] = [];
@@ -109,6 +113,7 @@ export function readDraft<T = unknown>(log: Iterable<DraftUpdate<T>>, draftId?: 
     heads,
     latest: heads.length ? heads[heads.length - 1]! : null,
     unresolved: conflicted ? heads : [],
+    ids: new Set(ix.byId.keys()),
     count: ix.byId.size,
     repeats: ix.repeats,
     dangling,
@@ -147,7 +152,8 @@ export interface DraftLinks {
  * any other head: only `resolveLinks` does.
  */
 export function editLinks<T>(state: DraftState<T>, mine?: { id: string; rev?: number | null }): DraftLinks {
-  if (mine) return { baseId: mine.id, baseRev: mine.rev ?? null };
+  // `mine` counts only while the log has not shown it yet; once it is there, the latest head is the truth.
+  if (mine && !state.ids.has(mine.id)) return { baseId: mine.id, baseRev: mine.rev ?? null };
   const l = state.latest;
   return l ? { baseId: l.id, baseRev: l.rev } : { baseId: null, baseRev: null };
 }
@@ -156,10 +162,15 @@ export function editLinks<T>(state: DraftState<T>, mine?: { id: string; rev?: nu
  * Links for an update a person writes to settle a conflict: it sits on the
  * chosen head (default: the latest) and resolves every other open head. Call
  * it only after a person has seen the heads side by side and chosen or
- * combined them. With no conflict it resolves nothing.
+ * combined them. Pass `seenIds` (the heads on screen) so a head that arrived
+ * meanwhile is not closed unseen. An id that is not an open head throws. With
+ * no heads it resolves nothing.
  */
-export function resolveLinks<T>(state: DraftState<T>, chosenId?: string): DraftLinks {
-  const base = chosenId === undefined ? state.latest : state.heads.find((h) => h.id === chosenId) ?? null;
-  if (!base) return { baseId: null, baseRev: null, resolves: [] };
-  return { baseId: base.id, baseRev: base.rev, resolves: state.heads.filter((h) => h.id !== base.id).map((h) => h.id) };
+export function resolveLinks<T>(state: DraftState<T>, chosenId?: string, seenIds?: readonly string[]): DraftLinks {
+  if (!state.heads.length) return { baseId: null, baseRev: null, resolves: [] };
+  const base = chosenId === undefined ? state.latest! : state.heads.find((h) => h.id === chosenId);
+  if (!base) throw new Error(`resolveLinks: ${chosenId} is not an open head`);
+  // Only heads the person saw are closed; one that arrived since stays open for the next look.
+  const seen = seenIds ? new Set(seenIds) : null;
+  return { baseId: base.id, baseRev: base.rev, resolves: state.heads.filter((h) => h.id !== base.id && (!seen || seen.has(h.id))).map((h) => h.id) };
 }
