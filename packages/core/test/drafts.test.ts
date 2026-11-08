@@ -339,8 +339,32 @@ describe("device-side links", () => {
     expect(after.heads.map((h) => h.id)).toEqual([merged.id]);
   });
 
-  it("an unknown chosen id resolves nothing", () => {
+  it("an unknown chosen id throws instead of starting a new root", () => {
     const a = u(1, null);
-    expect(resolveLinks(readDraft([a], D), "nope")).toEqual({ baseId: null, baseRev: null, resolves: [] });
+    expect(() => resolveLinks(readDraft([a], D), "nope")).toThrow(/not an open head/);
+    expect(resolveLinks(readDraft([], D))).toEqual({ baseId: null, baseRev: null, resolves: [] });
+  });
+
+  it("resolveLinks closes only the heads the person saw", () => {
+    const a = u(1, null);
+    const b = u(2, 1, { baseId: a.id });
+    const c = u(3, 1, { baseId: a.id });
+    const z = u(4, 1, { baseId: a.id });
+    const links = resolveLinks(readDraft([a, b, c, z], D), b.id, [b.id, c.id]);
+    expect(links.resolves).toEqual([c.id]);
+  });
+
+  it("a lost baseId falls back to baseRev", () => {
+    const a = u(1, null);
+    const x = u(2, null, { baseId: "ghost", baseRev: 1 });
+    expect(readDraft([a, x], D).conflicted).toBe(false);
+  });
+
+  it("editLinks ignores mine once the log shows it", () => {
+    const a = u(1, null);
+    const r = u(2, 1, { baseId: a.id });
+    const s = readDraft([a, r], D);
+    expect(editLinks(s, { id: a.id, rev: 1 })).toEqual({ baseId: r.id, baseRev: 2 });
+    expect(editLinks(s, { id: "unsent" })).toEqual({ baseId: "unsent", baseRev: null });
   });
 });

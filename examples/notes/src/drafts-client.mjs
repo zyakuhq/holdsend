@@ -91,7 +91,17 @@ async function syncUnconfirmed() {
     else if (now - info.seenQueued > 10_000) unconfirmed.delete(key);
   }
 }
-const lastUnconfirmed = () => [...unconfirmed.keys()].pop();
+/** This device's latest own edit the log does not show: from the outbox (survives a reload), else added in this page. */
+async function ownLatest() {
+  const queued = await pending();
+  return queued.length ? queued[queued.length - 1].item.key : [...unconfirmed.keys()].pop();
+}
+/** True while this device has an edit the log does not show, in the outbox or just sent. */
+async function hasUnsent() {
+  await syncUnconfirmed();
+  return unconfirmed.size > 0 || (await pending()).length > 0;
+}
+let shownHeadIds = []; // the heads on screen when the person chose
 const settlingNow = () => [...unconfirmed.values()].some((i) => i.reason === "resolve");
 
 async function addUpdate({ reason, text, links }) {
@@ -130,6 +140,7 @@ async function render() {
   const conflicted = state.conflicted && !settling;
   $("conflict").hidden = !conflicted;
   $("compose").hidden = conflicted;
+  if (conflicted) shownHeadIds = state.heads.map((h) => h.id);
   if (conflicted) {
     $("conflict-note").textContent = `${state.heads.length} edits were made from the same earlier version, so both are kept. Choose one, or write a version that uses both. The others stay in the history.`;
     $("heads").replaceChildren(
@@ -191,12 +202,11 @@ async function render() {
 
 /** A person chose one version: base on it, close the others. */
 async function keep(headId) {
-  await syncUnconfirmed();
-  if (unconfirmed.size > 0) return "Your own edits are not on the server yet. Settle this after they are.";
+  if (await hasUnsent()) return "Your own edits are not on the server yet. Settle this after they are.";
   const state = readDraft(log, DRAFT_ID);
   const head = state.heads.find((h) => h.id === headId);
   if (!head) return "That version is no longer open. Look again.";
-  await addUpdate({ reason: "resolve", text: head.payload?.text ?? "", links: resolveLinks(state, headId) });
+  await addUpdate({ reason: "resolve", text: head.payload?.text ?? "", links: resolveLinks(state, headId, shownHeadIds) });
   return "Saved your choice. It is sent when the connection allows.";
 }
 
@@ -206,7 +216,7 @@ $("compose").addEventListener("submit", (event) => {
     const text = $("text").value;
     const state = readDraft(log, DRAFT_ID);
     await syncUnconfirmed();
-    const last = lastUnconfirmed();
+    const last = await ownLatest();
     // An edit sits on this device's own latest unsent edit, so two offline
     // edits from one phone are one line, not a conflict with itself.
     await addUpdate({ reason: "edit", text, links: editLinks(state, last ? { id: last } : undefined) });
@@ -218,11 +228,10 @@ $("compose").addEventListener("submit", (event) => {
 $("combine").addEventListener("submit", (event) => {
   event.preventDefault();
   void act(async () => {
-    await syncUnconfirmed();
-    if (unconfirmed.size > 0) return "Your own edits are not on the server yet. Settle this after they are.";
+    if (await hasUnsent()) return "Your own edits are not on the server yet. Settle this after they are.";
     const state = readDraft(log, DRAFT_ID);
     if (!state.conflicted) return "Nothing to settle any more.";
-    await addUpdate({ reason: "resolve", text: $("combined").value, links: resolveLinks(state) });
+    await addUpdate({ reason: "resolve", text: $("combined").value, links: resolveLinks(state, undefined, shownHeadIds) });
     combinedTouched = false;
     return "Saved. It is sent when the connection allows.";
   });
