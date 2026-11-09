@@ -4,6 +4,7 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 
 ## Unreleased
 
+- `@holdsend/react-native`: `runBackgroundFlush(outbox, { owner, budgetMs })`, one time-limited flush for the callback of an Android background task (WorkManager through a library such as `expo-background-task`). It reports `done`, `waiting`, `out-of-time` or `failed`, and whether to ask the system to run the task again. Unit tests only; not yet run on a real phone.
 - New, in development: `@holdsend/core/emergency`, for short emergency messages. Messages wait in their own queue. The first message goes by itself when the connection returns, and later ones wait for the person to press Send. The same words tapped again are one message, a message waiting for a day asks before sending, and `smsLink` builds an SMS hand-off. It is a delivery aid, not an emergency service. Guide: docs/emergency.md.
 - `add()` takes a `decide` option that runs inside the store's atomic update. It can return a queued item instead of adding a new one, or hold the new item until a person approves it. Held items have `held: true` and show as `"needs_confirmation"`. `decide` gets copies, so it cannot change the queue.
 - `add()` takes `askAfterMs`: the item asks a person before it is sent once it is that old, whatever the sending outbox's policy. It is stored on the item as `askBy`, so service workers follow it too.
