@@ -10,6 +10,7 @@ ESM only. Load it with `import` on Node 20 or later, in browsers and in React Na
 
 - **`KeyValueStore`**: the outbox over AsyncStorage or MMKV (`fromMmkv(mmkv)`). The whole queue is saved in one write, and updates take turns, even across two store instances on the same key, within one JavaScript runtime. Nothing coordinates writes to the same key from another runtime (native code, or a second JavaScript context), so read and write the outbox only from the app's own JavaScript. A failed read or corrupt data makes the update fail; it never "starts fresh" over what the person wrote.
 - **`startNativeAutoFlush()`**: sends when the network comes back, when the app returns to the foreground, and on a backoff while items keep failing. You pass the NetInfo and AppState subscriptions, so HoldSend adds no native dependency.
+- **`runBackgroundFlush()`** (unreleased): one flush with a time limit, for the callback of an Android background task. It tells you whether to ask the system to run the task again.
 
 ## Use it
 
@@ -47,7 +48,16 @@ The queue is stored as one value. Android's AsyncStorage cannot read back a valu
 
 ## Sending while the app is closed
 
-iOS gives apps no reliable way to run when the connection returns. On iOS, what is waiting is sent the next time the app is open with a connection, and people should be told so. Android can run a background task; that is on the roadmap, not in this package yet.
+iOS gives apps no reliable way to run when the connection returns. On iOS, what is waiting is sent the next time the app is open with a connection, and people should be told so. Android can run a background task, and `runBackgroundFlush(outbox, { owner, budgetMs })` is the helper for its callback. HoldSend adds no background library; you register the task with the one you chose (for example `expo-background-task`) and map the answer:
+
+```ts
+TaskManager.defineTask(TASK, async () => {
+  const result = await runBackgroundFlush(outbox, { owner: await loadOwner() });
+  return result.retryLater ? BackgroundTask.BackgroundTaskResult.Failed : BackgroundTask.BackgroundTaskResult.Success;
+});
+```
+
+Limits to tell people about: the system decides if and when the task runs (usually 15 minutes or more apart, less on a low battery), and it may stop the task early. If it stops one mid-send, nothing is lost or sent twice: the item's claim goes stale and the next flush sends it again with the same key. This has been tested with a fake outbox in unit tests only; it has not run on a real Android phone yet. Do not promise "sent while the app is closed" in your own screens.
 
 ## Licence
 

@@ -8,3 +8,8 @@ export {
   type MmkvLike,
 } from "./kv-store.js";
 export { startNativeAutoFlush, type NativeAutoFlushOptions, type NativeAutoFlusher } from "./auto-flush.js";
+export {
+  runBackgroundFlush,
+  type BackgroundFlushOptions,
+  type BackgroundFlushResult,
+} from "./background.js";
