@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-09 (Android background flush helper)
+Last updated: 2026-11-10 (long-queue measurements)
 
 ## Done
 
@@ -42,6 +42,8 @@ Last updated: 2026-11-09 (Android background flush helper)
 
 ## In progress
 
+- Phase 3, low-end devices (unreleased, 2026-11-10): measured `KeyValueStore` on long queues. Writes per item are steady at three but each write rewrites the whole queue, so data written grows with the square of the queue (1,000 small items wrote about 900 MB). Written up in [low-end.md](low-end.md) with advice (keep queues short, no files in payloads); a test pins writes per item. Not measured on a real phone. A per-item store is not built; no one needs it yet.
+
 - Phase 3, Android background task (unreleased, 2026-11-09): `runBackgroundFlush` in `@holdsend/react-native`, one time-limited flush for the callback of a background task library, with six unit tests (checked to fail on broken code) and README guidance with the honest limits. Not run on a real Android phone or emulator; the Expo example does not register a task yet. Small pure helper, not reviewed by a separate agent.
 
 - Phase 3, one draft on two devices (unreleased): `readDraft` (2026-11-04) and the server helper (2026-11-05: `acceptDraftUpdate`, `MemoryDraftLog`, `PostgresDraftLog`), reviewed by a separate agent, findings fixed ([guide](drafts.md), [decision 0009](decisions/0009-two-device-drafts.md)). Before 0.3, `@holdsend/server` must depend on a core release that has `./drafts`. Device-side helpers `editLinks` and `resolveLinks` added 2026-11-06 (small pure functions, not yet reviewed by a separate agent). Conflict screen added 2026-11-07 in the notes example at `/drafts` (four browser tests, reviewed by a separate agent, findings fixed). Whole-feature audit by a separate reviewer done 2026-11-08, findings fixed with tests that fail on the old code ([decision 0009](decisions/0009-two-device-drafts.md)); `resolveLinks` now takes the ids on screen and throws on a non-head. Still to do: re-read by a second reviewer is not needed unless the API changes again.
@@ -54,7 +56,7 @@ Last updated: 2026-11-09 (Android background flush helper)
 
 1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 3: register a background task in the Expo example (needs a dev build on Android to prove it), and low-end device checks. Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
+3. Phase 3: register a background task in the Expo example (needs a dev build on Android to prove it), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
 
 ## After that
 
