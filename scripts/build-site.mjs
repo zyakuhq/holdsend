@@ -40,6 +40,7 @@ export const PAGES = [
       ["Wire protocol", "docs/protocol.md"],
       ["Emergency messages", "docs/emergency.md"],
       ["One draft on two devices", "docs/drafts.md"],
+      ["Long queues and slow phones", "docs/low-end.md"],
       ["How it is tested", "docs/testing.md"],
       ["Design notes", "docs/reference-notes.md"],
       ["Status and roadmap", "docs/STATUS.md"],
