@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL, SETUP_PROBLEM, demoUser, outbox } from "./outbox";
+import { registerSendTask } from "./background-task";
 import { useOutboxEntries } from "./use-outbox-entries";
 import { useConnected, useNativeAutoFlush } from "./use-native-auto-flush";
 
@@ -86,6 +87,12 @@ function Notes() {
   const [userProblem, setUserProblem] = useState("");
   useEffect(() => {
     demoUser().then(setOwner, (err) => setUserProblem(`Could not keep a user id on this device: ${err instanceof Error ? err.message : String(err)}`));
+  }, []);
+
+  // Android only: ask the system to try sending now and then while the app is closed.
+  const [background, setBackground] = useState("unavailable");
+  useEffect(() => {
+    registerSendTask().then(setBackground, () => setBackground("failed"));
   }, []);
 
   const connected = useConnected();
@@ -200,6 +207,10 @@ function Notes() {
           {Platform.OS === "ios"
             ? "On iPhone, waiting notes are sent the next time the app is open with a connection."
             : "Waiting notes are sent while the app is open with a connection."}
+          {background === "registered" || background === "already"
+            ? " When it is closed, Android may also try now and then (no more often than every 15 minutes, and only with a connection). That is not a promise: Android decides."
+            : ""}
+          {background === "failed" ? " Could not ask Android to send in the background." : ""}
         </Text>
 
         <Text style={s.label} nativeID="text-label">
