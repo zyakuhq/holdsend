@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-10 (long-queue measurements)
+Last updated: 2026-11-11 (Android background task in the Expo example)
 
 ## Done
 
@@ -40,11 +40,13 @@ Last updated: 2026-11-10 (long-queue measurements)
 
 - Flush order (2026-11-01): [decision 0008](decisions/0008-flush-order.md). A flush tries items oldest written first; a retry does not hold later items back, so order is not guaranteed. Pinned by a test, written in [emergency.md](emergency.md). No core code changed (the core is at its size budget).
 
+- CI browser job (2026-11-11): Chromium is installed from Playwright's download first; its Ubuntu system packages are tried twice and the tests decide if they were needed (two runs had failed on unreachable mirrors before any test ran).
+
 ## In progress
 
 - Phase 3, low-end devices (unreleased, 2026-11-10): measured `KeyValueStore` on long queues. Writes per item are steady at three but each write rewrites the whole queue, so data written grows with the square of the queue (1,000 small items wrote about 900 MB). Written up in [low-end.md](low-end.md) with advice (keep queues short, no files in payloads); a test pins writes per item. Not measured on a real phone. A per-item store is not built; no one needs it yet.
 
-- Phase 3, Android background task (unreleased, 2026-11-09): `runBackgroundFlush` in `@holdsend/react-native`, one time-limited flush for the callback of a background task library, with six unit tests (checked to fail on broken code) and README guidance with the honest limits. Not run on a real Android phone or emulator; the Expo example does not register a task yet. Small pure helper, not reviewed by a separate agent.
+- Phase 3, Android background task (unreleased, 2026-11-09): `runBackgroundFlush` in `@holdsend/react-native`, one time-limited flush for the callback of a background task library, with six unit tests (checked to fail on broken code) and README guidance with the honest limits. Since 2026-11-11 the Expo example registers it on Android with `expo-background-task` ([#55](https://github.com/zyakuhq/holdsend/pull/55), [decision 0010](decisions/0010-android-background-task.md)); reading that library's Android source showed it ignores the task's return value, so the guidance to return `Failed` when `retryLater` was corrected. Helper and example reviewed by a separate agent (nothing that can lose or double-send; five wording findings fixed). Not run on a real Android phone or emulator, and nothing in CI runs it.
 
 - Phase 3, one draft on two devices (unreleased): `readDraft` (2026-11-04) and the server helper (2026-11-05: `acceptDraftUpdate`, `MemoryDraftLog`, `PostgresDraftLog`), reviewed by a separate agent, findings fixed ([guide](drafts.md), [decision 0009](decisions/0009-two-device-drafts.md)). Before 0.3, `@holdsend/server` must depend on a core release that has `./drafts`. Device-side helpers `editLinks` and `resolveLinks` added 2026-11-06 (small pure functions, not yet reviewed by a separate agent). Conflict screen added 2026-11-07 in the notes example at `/drafts` (four browser tests, reviewed by a separate agent, findings fixed). Whole-feature audit by a separate reviewer done 2026-11-08, findings fixed with tests that fail on the old code ([decision 0009](decisions/0009-two-device-drafts.md)); `resolveLinks` now takes the ids on screen and throws on a non-head. Still to do: re-read by a second reviewer is not needed unless the API changes again.
 
@@ -56,12 +58,11 @@ Last updated: 2026-11-10 (long-queue measurements)
 
 1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Before tagging: version bump and release notes in one pull request, then install the staged packages and run the smoke test.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 3: register a background task in the Expo example (needs a dev build on Android to prove it), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
+3. Phase 3: prove the Expo example's background task on Android with a development build (phone or emulator), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
 
 ## After that
 
 - Conflict handling for one draft edited on two devices (append-only updates with a reason). This is the hard part; say so.
-- An Android background task for React Native.
 
 ## Blockers
 
