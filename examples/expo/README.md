@@ -37,13 +37,19 @@ This is a development setup. A release Android build refuses plain `http://` add
 
 While the app is open: right away, when the connection comes back (NetInfo), when the app returns to the foreground (AppState), and on a backoff while sending keeps failing.
 
-While the app is closed: not yet. iOS gives apps no reliable way to run when the connection returns, so on iPhone waiting notes go the next time the app is open with a connection, and the app says so. Android can run a background task; that is on the roadmap.
+While the app is closed:
+
+- **iPhone:** not at all. iOS gives apps no reliable way to run when the connection returns, so waiting notes go the next time the app is open with a connection, and the app says so.
+- **Android:** maybe. [`src/background-task.js`](src/background-task.js) registers a task with `expo-background-task` that calls `runBackgroundFlush` from `@holdsend/react-native`. Android decides if and when it runs: no more often than every 15 minutes, only with a connection, not while the app is open, later or not at all on a low battery or when the app has been force-stopped. If Android stops it mid-send, nothing is lost or sent twice; the next run sends the same note with the same key.
+
+The background task needs a [development build](https://docs.expo.dev/develop/development-builds/introduction/) (`npx expo run:android`); do not rely on Expo Go for it. To try it, write a note in airplane mode, leave the app, turn airplane mode off and wait (with a debug build, `BackgroundTask.triggerTaskWorkerForTestingAsync()` runs it at once). This has not yet been checked on a real Android phone or emulator, and nothing in CI runs it.
 
 ## What is where
 
 | File | What it shows |
 | --- | --- |
 | [`src/outbox.js`](src/outbox.js) | One `Outbox` over a `KeyValueStore` on AsyncStorage, created outside React. Keys come from `expo-crypto`. |
+| [`src/background-task.js`](src/background-task.js) | The Android background task: defined in the bundle's global scope (imported from `index.js`), registered once, a time-limited `runBackgroundFlush`. |
 | [`src/use-native-auto-flush.js`](src/use-native-auto-flush.js) | `useNativeAutoFlush` and `useConnected`: sending wired to NetInfo and AppState. Copy it into your app. |
 | [`src/use-outbox-entries.js`](src/use-outbox-entries.js) | `useOutboxEntries`, the same hook as in the [React example](../react). |
 | [`src/App.js`](src/App.js) | The screen: compose, the outbox with Cancel, Send, Try again and Discard, each saying what really happened, and the published list. |

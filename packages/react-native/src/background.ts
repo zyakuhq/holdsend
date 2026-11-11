@@ -7,8 +7,11 @@
  *
  *   TaskManager.defineTask(TASK, async () => {
  *     const result = await runBackgroundFlush(outbox, { owner: await loadOwner() });
- *     return result.retryLater ? BackgroundTask.BackgroundTaskResult.Failed : BackgroundTask.BackgroundTaskResult.Success;
+ *     return result.outcome === "failed" ? BackgroundTask.BackgroundTaskResult.Failed : BackgroundTask.BackgroundTaskResult.Success;
  *   });
+ *
+ * `retryLater` only helps with a library that can run the task again sooner;
+ * expo-background-task schedules the next run the same way whatever it gets.
  *
  * Honest limits: the operating system decides if and when the task runs
  * (often 15 minutes or more apart, less on low battery), and it may stop the
