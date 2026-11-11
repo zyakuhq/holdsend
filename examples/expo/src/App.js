@@ -208,7 +208,7 @@ function Notes() {
             ? "On iPhone, waiting notes are sent the next time the app is open with a connection."
             : "Waiting notes are sent while the app is open with a connection."}
           {background === "registered" || background === "already"
-            ? " When it is closed, Android may also try now and then (no more often than every 15 minutes, and only with a connection). That is not a promise: Android decides."
+            ? " When it is closed, Android may also try now and then (the app asks for every 15 minutes, only with a connection). That is not a promise: Android decides."
             : ""}
           {background === "failed" ? " Could not ask Android to send in the background." : ""}
         </Text>

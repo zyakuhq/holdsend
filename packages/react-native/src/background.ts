@@ -29,12 +29,12 @@ const timers = globalThis as unknown as Timers;
 
 export interface BackgroundFlushOptions {
   owner?: string;
-  /** Stop waiting after this many ms (default 20000). The attempt in flight may still finish. */
+  /** Stop waiting after this many ms (default 20000). The system may then stop or pause the attempt in flight; its claim goes stale and a later flush takes it over. */
   budgetMs?: number;
 }
 
 export interface BackgroundFlushResult {
-  /** What happened: everything sent or nothing to do, some items wait, time ran out, or the flush threw. */
+  /** What happened: everything sent or nothing to do, some items wait, time ran out, or the flush threw. If the outbox's `isOnline` says offline, the flush does nothing and this is "done". */
   outcome: "done" | "waiting" | "out-of-time" | "failed";
   /** True when asking the system to run the task again soon makes sense. */
   retryLater: boolean;
