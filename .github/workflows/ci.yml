@@ -94,7 +94,12 @@ jobs:
       - run: npm run build
       - name: Install Chromium for Playwright
         working-directory: examples/notes
-        run: npx playwright install --with-deps chromium
+        # The browser comes from Playwright's own download. Its system packages
+        # (mostly fonts) come from the Ubuntu mirrors, which the runner sometimes
+        # cannot reach; try twice, then let the tests decide whether they were needed.
+        run: |
+          npx playwright install chromium
+          npx playwright install-deps chromium || { sleep 30; npx playwright install-deps chromium; } || echo "::warning::Could not install Playwright's system packages; running the tests anyway"
       - name: Offline, lost-answer and two-tab tests
         run: npm run e2e
 
