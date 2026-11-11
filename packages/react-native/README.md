@@ -57,7 +57,7 @@ TaskManager.defineTask(TASK, async () => {
 });
 ```
 
-`retryLater` says whether an earlier run would help. Use it only if your library can act on it: `expo-background-task` (checked in its Android source, version 58) schedules the next run the same way whatever the task returns, and only runs with a connection, so there the result is just for your logs. The [Expo example](../../examples/expo) registers such a task on Android.
+`retryLater` says whether an earlier run would help. Use it only if your library can act on it: `expo-background-task` (checked in its Android source, version 58) ignores the task's return value and schedules the next run the same way, and only runs with a connection. If your outbox has an `isOnline` check that says offline, the flush does nothing and the result is `done`. The [Expo example](../../examples/expo) registers such a task on Android.
 
 Limits to tell people about: the system decides if and when the task runs (usually 15 minutes or more apart, less on a low battery), and it may stop the task early. If it stops one mid-send, nothing is lost or sent twice: the item's claim goes stale and the next flush sends it again with the same key. This has been tested with a fake outbox in unit tests only; it has not run on a real Android phone yet. Do not promise "sent while the app is closed" in your own screens.
 
