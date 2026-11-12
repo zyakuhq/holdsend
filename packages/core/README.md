@@ -15,8 +15,8 @@ ESM only. Load it with `import` on Node 20 or later, in browsers and in React Na
 - `Outbox`: add, list, cancel, approve, retry, discard and flush.
 - `MemoryStore`: an in-memory store for tests. Platform packages provide durable stores.
 - `statusOf` and `needsConfirmation`, for showing items. The rest of the state machine is internal, so it can change without breaking anyone.
-- In development for 0.2, not in a published release yet: `@holdsend/core/emergency`, for short emergency messages (the first goes by itself, later ones wait for the person, repeated taps are one message, SMS hand-off). See [emergency messages](https://github.com/zyakuhq/holdsend/blob/main/docs/emergency.md).
-- Early, for 0.3, not in a published release yet: `@holdsend/core/drafts`, for one draft edited on two devices. `readDraft` reads the server's update log and lists the open heads (two or more mean a conflict a person settles); `editLinks` and `resolveLinks` build the link fields of a new update. It never merges text and never picks a winner. The API may still change. See [one draft on two devices](https://github.com/zyakuhq/holdsend/blob/main/docs/drafts.md).
+- New in 0.2: `@holdsend/core/emergency`, for short emergency messages (the first goes by itself, later ones wait for the person, repeated taps are one message, SMS hand-off). See [emergency messages](https://github.com/zyakuhq/holdsend/blob/main/docs/emergency.md).
+- Early (since 0.2, finished for 0.3; the API may still change): `@holdsend/core/drafts`, for one draft edited on two devices. `readDraft` reads the server's update log and lists the open heads (two or more mean a conflict a person settles); `editLinks` and `resolveLinks` build the link fields of a new update. It never merges text and never picks a winner. See [one draft on two devices](https://github.com/zyakuhq/holdsend/blob/main/docs/drafts.md).
 - The wire protocol: `requestHeaders`, `classifyResponse`, `classifyThrown`.
 - Written-time rules shared with servers: `acceptWrittenAt`, `wasWrittenOffline`.
 

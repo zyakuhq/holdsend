@@ -6,7 +6,7 @@ All four packages share one version and are published together by the Release wo
 2. Set the same version in every `packages/*/package.json`, and in their `@holdsend/core` dependency. `npm run check` fails if they disagree, if a package would publish anything but its build output, README, LICENSE and NOTICE, or if a package cannot be loaded with import and require.
 3. Run the Release workflow by hand. A manual run always dry-runs; read what it would publish.
 4. Merge, then push a tag `v<version>` on that commit. The workflow builds and checks without any secret, then waits for a reviewer of the `npm-release` environment (the project lead) to approve publishing. It publishes core first and then the rest, skipping any version already on npm (so a re-run finishes a half-done release), and creates the GitHub release.
-5. After the npm approvals, install all four packages from npm in an empty folder and run `scripts/smoke-node.mjs` there, on Node 20.0.0 and on the current Node. It loads every subpath (`./emergency`, `./drafts`) as npm serves it.
+5. After the npm approvals, copy `scripts/smoke-node.mjs` into an empty folder, run `npm i @holdsend/core@<version> @holdsend/server@<version> @holdsend/web@<version> @holdsend/react-native@<version> fake-indexeddb` there, and run `node smoke-node.mjs` on Node 20.0.0 and on the current Node. Run it from a copy: run in place, Node finds the repository's own packages instead of the installed ones. It loads every subpath (`./emergency`, `./drafts`) as npm serves it.
 
 A version with a dash (for example `0.2.0-rc.1`) is published under the `next` tag, never `latest`.
 
