@@ -108,10 +108,16 @@ for (const [name, store] of stores) {
   const put = (key, update) =>
     acceptDraftUpdate({ store, log, owner: "smoke-person", headers: { "Idempotency-Key": key }, update, waitMs: 0 });
   assert.equal((await put("smoke-base-01", { draftId: "d1", reason: "edit", payload: "base" })).status, 201);
-  await put("smoke-phone-1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "phone" });
-  await put("smoke-laptop1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "laptop" });
-  await put("smoke-laptop1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "laptop" });
+  assert.equal((await put("smoke-phone-1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "phone" })).status, 201);
+  const laptop = await put("smoke-laptop1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "laptop" });
+  assert.equal(laptop.status, 201, "drafts: laptop edit stored");
+  const retry = await put("smoke-laptop1", { draftId: "d1", reason: "edit", baseRev: 1, payload: "laptop" });
+  assert.equal(retry.outcome, "replayed", "drafts: a retry is answered as a replay");
+  assert.deepEqual(retry.body, laptop.body, "drafts: the replay has the same id and revision");
+  assert.equal((await log.list("smoke-person", "d1")).length, 3, "drafts: the retry added no row");
   const state = await readDraftState(log, "smoke-person", "d1");
+  assert.equal(state.count, 3, "drafts: three updates");
+  assert.equal(state.repeats, 0, "drafts: no repeated ids in the log");
   assert.equal(state.conflicted, true, "drafts: two heads are a conflict");
   assert.deepEqual(state.unresolved.map((u) => u.payload).sort(), ["laptop", "phone"], "drafts: both edits kept, once each");
   const again = readDraft(await log.list("smoke-person", "d1"), "d1");
