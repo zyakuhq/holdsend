@@ -1,6 +1,6 @@
 # One draft on two devices
 
-For 0.3, unreleased. Design: [decision 0009](decisions/0009-two-device-drafts.md). This is the hard part of offline writing, and nothing here is perfect: the aim is that **no edit is silently lost**. The library never merges text and never picks a winner.
+Early, for 0.3: the code goes out with 0.2.0 ([decision 0011](decisions/0011-what-0.2.0-ships.md)), but the API may still change. Design: [decision 0009](decisions/0009-two-device-drafts.md). This is the hard part of offline writing, and nothing here is perfect: the aim is that **no edit is silently lost**. The library never merges text and never picks a winner.
 
 ## How it works
 

@@ -88,6 +88,10 @@ Access-Control-Expose-Headers: Idempotent-Replayed
 
 Both pass the same contract test suite.
 
+## One draft on two devices (early)
+
+Early, for 0.3, not in a published release yet; the API may still change. `acceptDraftUpdate` stores every update of a draft with a revision number from the server, never refuses one for being stale, and commits it together with its idempotency record. `readDraftState` lists the open heads. `MemoryDraftLog` and `PostgresDraftLog` (with `postgresDraftSchema()`) keep the log. See [one draft on two devices](https://github.com/zyakuhq/holdsend/blob/main/docs/drafts.md).
+
 ## Licence
 
 Apache-2.0
