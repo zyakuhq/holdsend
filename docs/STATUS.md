@@ -2,7 +2,7 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-12 (release prep for 0.2.0)
+Last updated: 2026-11-13 (0.2.0 version bump merged, waiting for the tag and approvals)
 
 ## Done
 
@@ -58,7 +58,7 @@ Last updated: 2026-11-12 (release prep for 0.2.0)
 
 ## Next tasks
 
-1. Release 0.2.0 after the project lead's go-ahead (two approvals: GitHub, then npm with 2FA). Release notes are ready in CHANGELOG (Unreleased). Still to do in one pull request: version bump to 0.2.0 in all four packages and their core dependency, move Unreleased under 0.2.0 with the date, update the "New in 0.2" and "early" status lines. Then tag, approvals, and releasing.md step 5.
+1. Release 0.2.0: the version bump, changelog and status lines are on main (2026-11-13). Left: the tag `v0.2.0` (from the GitHub release page), the project lead's two approvals (GitHub `npm-release`, then npm with 2FA, core first), then releasing.md step 5 and the status lines that say "0.2 on npm" checked against npm.
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
 3. Phase 3: prove the Expo example's background task on Android with a development build (phone or emulator), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
 

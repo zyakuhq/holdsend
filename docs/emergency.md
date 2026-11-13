@@ -1,6 +1,6 @@
 # Emergency messages
 
-> In development for 0.2. It is in the repository but not in a published release yet. The API may change.
+> New in 0.2.0. The API may change before 1.0.
 
 `@holdsend/core/emergency` helps a short text message get out of a phone that has no signal, once, without misleading the person who wrote it. It is a delivery aid, not an emergency service. It does not contact emergency services. Any app that uses it must keep telling people to call their local emergency number first.
 

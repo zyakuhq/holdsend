@@ -1,6 +1,6 @@
 {
   "name": "@holdsend/web",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "HoldSend for browsers: an IndexedDB outbox store, one sender across tabs, and honest background-sync helpers.",
   "license": "Apache-2.0",
   "type": "module",
@@ -26,7 +26,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@holdsend/core": "0.1.1"
+    "@holdsend/core": "0.2.0"
   },
   "publishConfig": {
     "access": "public",
