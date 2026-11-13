@@ -8,7 +8,7 @@ Thank you for helping. HoldSend exists for people writing from places with bad o
 git clone https://github.com/zyakuhq/holdsend.git
 cd holdsend
 npm install
-npm run check   # lint, typecheck, tests, build, size budget, PII scan
+npm run check   # lint, typecheck, tests, build, size budget, public API record, PII scan
 git config core.hooksPath .githooks   # secret and PII scan before every push
 ```
 
@@ -18,7 +18,7 @@ Node 20 or newer.
 
 - Small pull requests, one idea each. `main` is always green.
 - Every change to the outbox rules comes with a test that would have failed without it. If the change is about a failure (a lost answer, a killed app, two tabs), the test should reproduce that failure.
-- Public API changes need a short note in [docs/decisions](docs/decisions): the context, the choice and why.
+- Public API changes need a short note in [docs/decisions](docs/decisions): the context, the choice and why. The public API is recorded in [api/](api); after an intended change, run `node scripts/api-surface.mjs --update` and commit the diff with the code.
 - Plain English in commits, pull requests and docs. Say what changed and why.
 - Keep `@holdsend/core` free of runtime dependencies and within its size budget (`npm run size`).
 

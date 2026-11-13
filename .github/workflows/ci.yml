@@ -28,6 +28,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run size
+      - name: Public API matches the record in api/
+        run: npm run api
 
   oldest-node:
     name: Packages on the oldest supported Node

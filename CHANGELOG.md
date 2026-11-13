@@ -4,7 +4,7 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 
 ## Unreleased
 
-Nothing yet.
+- The public TypeScript API of every entry point is recorded in `api/*.api.txt`; `npm run check` and CI fail when it changes without the record being updated, so every API change shows up in review. No package code changed.
 
 ## 0.2.0 (2026-11-13)
 
