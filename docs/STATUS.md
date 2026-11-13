@@ -2,10 +2,11 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-13 (0.2.0 version bump merged, waiting for the tag and approvals)
+Last updated: 2026-11-13 (0.2.0 published to npm)
 
 ## Done
 
+- **0.2.0 published to npm (2026-11-13)**: all four packages, through trusted publishing and staged publishing, after the project lead's approvals (GitHub `npm-release`, then npm with a security key, core first). A manual dry-run of the Release workflow ran first. Checked by installing all four from npm in an empty folder and running `scripts/smoke-node.mjs` on Node 20.0.0 and 22; `npm audit signatures` verified the attestations of all four.
 - Phase 2 audit closed (2026-11-03), except one item that needs a real iPhone: a clock set back after writing now makes an item ask first (every outbox); `write()` refuses a future `writtenAt`, resets its flags when a store retries `decide`, and matches Unicode forms; the iOS multi-recipient SMS link encodes `+`; four more browser tests (service worker background sync, the one-day rule, two people on one browser, HTML shown as text), each checked to fail on broken code. The SMS hand-off record stays in apps for 0.2 ([audit](audits/2026-10-30-phase2-audit.md)).
 - Emergency messages, first part (2026-10-29, unreleased): [decision 0007](decisions/0007-emergency-messages.md), `@holdsend/core/emergency` (`EmergencyOutbox`, `smsLink`), and in the core `add({ decide, askAfterMs })` with `held` and `askBy` stored on each item. Reviewed by a separate agent before merge; its eleven findings were fixed, each new test checked to fail without its fix. Guide: [emergency.md](emergency.md).
 - Every package exports `./package.json` (2026-10-29, unreleased).
@@ -58,7 +59,7 @@ Last updated: 2026-11-13 (0.2.0 version bump merged, waiting for the tag and app
 
 ## Next tasks
 
-1. Release 0.2.0: the version bump, changelog and status lines are on main (2026-11-13). Left: the tag `v0.2.0` (from the GitHub release page), the project lead's two approvals (GitHub `npm-release`, then npm with 2FA, core first), then releasing.md step 5 and the status lines that say "0.2 on npm" checked against npm.
+1. Show HN, now that 0.2.0 is out, after the project lead's yes (draft kept out of the repo).
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
 3. Phase 3: prove the Expo example's background task on Android with a development build (phone or emulator), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
 
