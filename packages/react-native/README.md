@@ -2,7 +2,7 @@
 
 [HoldSend](https://github.com/zyakuhq/holdsend) for React Native.
 
-> Early: 0.1 is the first release line. The API may change before 1.0, and it is not ready for production yet.
+> Early: 0.2 is the current release line. The API may change before 1.0, and it is not ready for production yet.
 
 ESM only. Load it with `import` on Node 20 or later, in browsers and in React Native. `require()` also works on Node 20.19 or later and 22.12 or later; on older Node, use `import()`.
 
@@ -10,7 +10,7 @@ ESM only. Load it with `import` on Node 20 or later, in browsers and in React Na
 
 - **`KeyValueStore`**: the outbox over AsyncStorage or MMKV (`fromMmkv(mmkv)`). The whole queue is saved in one write, and updates take turns, even across two store instances on the same key, within one JavaScript runtime. Nothing coordinates writes to the same key from another runtime (native code, or a second JavaScript context), so read and write the outbox only from the app's own JavaScript. A failed read or corrupt data makes the update fail; it never "starts fresh" over what the person wrote.
 - **`startNativeAutoFlush()`**: sends when the network comes back, when the app returns to the foreground, and on a backoff while items keep failing. You pass the NetInfo and AppState subscriptions, so HoldSend adds no native dependency.
-- **`runBackgroundFlush()`** (unreleased): one flush with a time limit, for the callback of an Android background task. It says whether an earlier run would help.
+- **`runBackgroundFlush()`** (new in 0.2): one flush with a time limit, for the callback of an Android background task. It says whether an earlier run would help.
 
 ## Use it
 

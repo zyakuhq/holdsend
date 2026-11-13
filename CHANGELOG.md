@@ -4,6 +4,12 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.2.0 (2026-11-13)
+
+The emergency module, the Android background flush for React Native, and early helpers for one draft edited on two devices (finished for 0.3). Packages that do not use the new parts need no changes.
+
 - Early, for 0.3 (the API may still change): `@holdsend/core/drafts`, for one draft edited on two devices. `readDraft` and `ancestorsOf` read an update log and list the open heads; `editLinks` and `resolveLinks` build the link fields of a new update (`resolveLinks` closes only the heads a person saw, and throws when the chosen id is not an open head). Nothing is merged and no winner is picked: two heads are a conflict a person settles. Guide: docs/drafts.md.
 - Early, for 0.3: `@holdsend/server` stores draft updates with `acceptDraftUpdate`, `MemoryDraftLog`, `PostgresDraftLog` and `postgresDraftSchema()`, and reads them with `readDraftState`. Every update is kept with a revision number from the server, and is committed together with its idempotency record, so a retry is the same update. `checkDraftUpdate` checks one before storing (payload at most 256 KiB of plain JSON). `onMemoryCommit` lets another in-memory store (such as `MemoryDraftLog`) commit or roll back with a `MemoryIdempotencyStore` transaction.
 - docs/low-end.md: what a long queue costs in `KeyValueStore` (each change rewrites the whole queue, so bytes written grow with the square of its length), measured on a laptop, with advice for slow phones.
