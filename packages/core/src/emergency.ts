@@ -7,7 +7,7 @@
  *   import { EmergencyOutbox, smsLink } from "@holdsend/core/emergency";
  */
 import { Outbox, type OutboxOptions } from "./outbox.js";
-import { statusOf } from "./transitions.js";
+import { statusOf, type RetryResult } from "./transitions.js";
 import { resolvePolicy, type OutboxItem, type Policy, type PolicyOptions } from "./types.js";
 
 /** The payload of every emergency message. Text only. */
@@ -137,7 +137,7 @@ export class EmergencyOutbox {
   }
 
   /** The person pressed Send on one waiting message. Flush (or kick auto-flush) afterwards. */
-  send(key: string) {
+  send(key: string): Promise<RetryResult> {
     return this.outbox.approve(key);
   }
 

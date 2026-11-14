@@ -19,7 +19,8 @@
  */
 import { createFlushScheduler, type FlushReport, type Outbox } from "@holdsend/core";
 
-type Unsubscribe = () => void;
+/** Stops a listener started by `onConnectivityChange` or `onForeground`. */
+export type Unsubscribe = () => void;
 
 export interface NativeAutoFlushOptions {
   owner?: string;

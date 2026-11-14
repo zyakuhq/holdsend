@@ -72,6 +72,9 @@ class OutboxTooLargeError extends Error {
     constructor(bytes: number, maxBytes: number);
 }
 
+// Unsubscribe
+type Unsubscribe = () => void;
+
 // fromMmkv
 function fromMmkv(mmkv: MmkvLike): AsyncKeyValue;
 
@@ -80,8 +83,3 @@ function runBackgroundFlush<P>(outbox: Outbox<P>, options?: BackgroundFlushOptio
 
 // startNativeAutoFlush
 function startNativeAutoFlush<P>(outbox: Outbox<P>, options?: NativeAutoFlushOptions): NativeAutoFlusher;
-
-// ---- Not exported, but part of the API through the declarations above ----
-
-// Unsubscribe (packages/react-native/dist/auto-flush.d.ts)
-type Unsubscribe = () => void;

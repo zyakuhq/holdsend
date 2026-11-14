@@ -9,7 +9,7 @@
  * The update id is the Idempotency-Key, so a retry is the same update.
  */
 import { readDraft, type DraftState, type DraftUpdate } from "@holdsend/core/drafts";
-import { handleIdempotent, type IdempotentAnswer } from "./handler.js";
+import { handleIdempotent, type HeaderSource, type IdempotentAnswer } from "./handler.js";
 import { onMemoryCommit, type MemoryTx } from "./memory-store.js";
 import type { Queryable } from "./postgres-store.js";
 import type { IdempotencyStore } from "./types.js";
@@ -201,9 +201,9 @@ export class PostgresDraftLog implements DraftLog<Queryable> {
     if (!IDENTIFIER.test(options.table ?? "holdsend_draft_updates")) throw new TypeError(`invalid table name: ${options.table}`);
   }
 
-  async append(tx: Queryable, owner: string, u: NewDraftUpdate & { id: string }): Promise<DraftUpdate> {
-    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([this.table, owner, u.draftId])]);
-    const found = await tx.query(`SELECT * FROM ${this.table} WHERE owner = $1 AND draft_id = $2 AND id = $3`, [owner, u.draftId, u.id]);
+  async append(tx: Queryable, owner: string, update: NewDraftUpdate & { id: string }): Promise<DraftUpdate> {
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([this.table, owner, update.draftId])]);
+    const found = await tx.query(`SELECT * FROM ${this.table} WHERE owner = $1 AND draft_id = $2 AND id = $3`, [owner, update.draftId, update.id]);
     if (found.rows.length) return fromRow(found.rows[0] as DraftRow);
     const inserted = await tx.query(
       `INSERT INTO ${this.table} (owner, draft_id, id, rev, base_rev, base_id, reason, resolves, written_at, payload)
@@ -211,14 +211,14 @@ export class PostgresDraftLog implements DraftLog<Queryable> {
        RETURNING *`,
       [
         owner,
-        u.draftId,
-        u.id,
-        u.baseRev ?? null,
-        u.baseId ?? null,
-        u.reason,
-        JSON.stringify(u.resolves ?? []),
-        u.writtenAt ?? null,
-        u.payload === undefined ? null : JSON.stringify(u.payload),
+        update.draftId,
+        update.id,
+        update.baseRev ?? null,
+        update.baseId ?? null,
+        update.reason,
+        JSON.stringify(update.resolves ?? []),
+        update.writtenAt ?? null,
+        update.payload === undefined ? null : JSON.stringify(update.payload),
       ],
     );
     return fromRow(inserted.rows[0] as DraftRow);
@@ -235,7 +235,7 @@ export interface AcceptDraftUpdateOptions<Tx> {
   log: DraftLog<Tx>;
   owner: string;
   /** Request headers. The Idempotency-Key is required and becomes the update id. */
-  headers: Parameters<typeof handleIdempotent>[0]["headers"];
+  headers: HeaderSource | undefined;
   update: NewDraftUpdate;
   waitMs?: number;
 }
@@ -253,20 +253,20 @@ export interface DraftAccepted {
  * is how a retry avoids adding the edit twice. Read the draft's state with
  * `readDraftState`.
  */
-export async function acceptDraftUpdate<Tx>(o: AcceptDraftUpdateOptions<Tx>): Promise<IdempotentAnswer> {
-  const bad = checkDraftUpdate(o.update);
+export async function acceptDraftUpdate<Tx>(options: AcceptDraftUpdateOptions<Tx>): Promise<IdempotentAnswer> {
+  const bad = checkDraftUpdate(options.update);
   if (bad) return { status: 400, body: { error: "invalid_update", message: bad }, headers: {}, outcome: "not_stored" };
-  const update = o.update;
+  const update = options.update;
   return handleIdempotent<Tx>({
-    store: o.store,
-    owner: o.owner,
+    store: options.store,
+    owner: options.owner,
     operation: "draft.update",
-    headers: o.headers,
+    headers: options.headers,
     content: update,
     requireKey: true,
-    ...(o.waitMs !== undefined ? { waitMs: o.waitMs } : {}),
+    ...(options.waitMs !== undefined ? { waitMs: options.waitMs } : {}),
     create: async (tx, { key }) => {
-      const stored = await o.log.append(tx, o.owner, { ...update, id: key! });
+      const stored = await options.log.append(tx, options.owner, { ...update, id: key! });
       const body: DraftAccepted = { id: stored.id, draftId: stored.draftId, rev: stored.rev };
       return { status: 201, body, resourceRef: `${update.draftId}/${stored.id}` };
     },

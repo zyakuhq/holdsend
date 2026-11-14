@@ -283,7 +283,7 @@ class EmergencyOutbox {
     readonly outbox: Outbox<EmergencyMessage>;
     constructor(options: EmergencyOutboxOptions);
     write(text: string, options?: WriteOptions): Promise<WriteResult>;
-    send(key: string): Promise<import("./transitions.js").RetryResult>;
+    send(key: string): Promise<RetryResult>;
     sendAll(owner?: string): Promise<string[]>;
 }
 
