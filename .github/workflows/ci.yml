@@ -149,3 +149,10 @@ jobs:
             exit 1
           fi
           echo "commit emails ok"
+      - name: No tool attribution in commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # The pull request's commits, or on main the whole history.
+          if [ -n "$BASE" ]; then node scripts/commit-message-check.mjs "$BASE..$HEAD"; else node scripts/commit-message-check.mjs; fi

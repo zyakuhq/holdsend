@@ -12,3 +12,4 @@ else
 fi
 
 node scripts/pii-scan.mjs
+node scripts/commit-message-check.mjs

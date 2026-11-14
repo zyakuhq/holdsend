@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rejects a commit message that carries a tool attribution line.
+# Enable once per clone:  git config core.hooksPath .githooks
+exec node scripts/commit-message-check.mjs --file "$1"
