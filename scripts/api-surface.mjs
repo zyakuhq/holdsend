@@ -166,6 +166,14 @@ const publicKeys = allExportedKeys(program, allFiles);
 const changed = [];
 for (const { pkgName, entries } of packages) {
   const text = entries.map((entry) => surface(entry, program, publicKeys)).join("\n");
+  // An inferred type that names an internal file (`import("./x.js").T`) is not
+  // followed by the record and ties the API to a file layout: annotate it.
+  const inferred = text.split("\n").filter((line) => /\bimport\(/.test(line));
+  if (inferred.length > 0) {
+    console.error(`api: ${pkgName} has types that point into internal files; give them an explicit type:`);
+    for (const line of inferred) console.error(`api:   ${line.trim()}`);
+    process.exit(1);
+  }
   const file = join(OUT_DIR, `${pkgName.replace("@holdsend/", "")}.api.txt`);
   const before = existsSync(file) ? readFileSync(file, "utf8") : null;
   if (before === text) continue;

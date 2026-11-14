@@ -15,6 +15,7 @@ export {
   PostgresIdempotencyStore,
   pgPoolTransaction,
   postgresSchema,
+  type PoolLike,
   type PostgresStoreOptions,
   type Queryable,
   type QueryResultLike,

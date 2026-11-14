@@ -279,7 +279,8 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
   }
 }
 
-interface PoolLike {
+/** The part of a node-postgres `Pool` that `pgPoolTransaction` uses. */
+export interface PoolLike {
   connect(): Promise<Queryable & { release(err?: unknown): void }>;
 }
 

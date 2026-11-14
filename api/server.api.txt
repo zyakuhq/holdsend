@@ -6,7 +6,7 @@ interface AcceptDraftUpdateOptions<Tx> {
     store: IdempotencyStore<Tx>;
     log: DraftLog<Tx>;
     owner: string;
-    headers: Parameters<typeof handleIdempotent>[0]["headers"];
+    headers: HeaderSource | undefined;
     update: NewDraftUpdate;
     waitMs?: number;
 }
@@ -156,13 +156,20 @@ interface NewDraftUpdate<T = unknown> {
     payload?: T;
 }
 
+// PoolLike
+interface PoolLike {
+    connect(): Promise<Queryable & {
+        release(err?: unknown): void;
+    }>;
+}
+
 // PostgresDraftLog
 class PostgresDraftLog implements DraftLog<Queryable> {
     constructor(options: {
         db: Queryable;
         table?: string;
     });
-    append(tx: Queryable, owner: string, u: NewDraftUpdate & {
+    append(tx: Queryable, owner: string, update: NewDraftUpdate & {
         id: string;
     }): Promise<DraftUpdate>;
     list(owner: string, draftId: string): Promise<DraftUpdate[]>;
@@ -228,7 +235,7 @@ interface StoredResult {
 }
 
 // acceptDraftUpdate
-function acceptDraftUpdate<Tx>(o: AcceptDraftUpdateOptions<Tx>): Promise<IdempotentAnswer>;
+function acceptDraftUpdate<Tx>(options: AcceptDraftUpdateOptions<Tx>): Promise<IdempotentAnswer>;
 
 // canonicalJson
 function canonicalJson(content: unknown): string;
@@ -265,12 +272,3 @@ function readHeader(headers: HeaderSource | undefined, name: string): string | u
 
 // writtenAtFromRequest
 function writtenAtFromRequest(headers: HeaderSource | undefined, now?: number, bounds?: WrittenAtBounds): number | null;
-
-// ---- Not exported, but part of the API through the declarations above ----
-
-// PoolLike (packages/server/dist/postgres-store.d.ts)
-interface PoolLike {
-    connect(): Promise<Queryable & {
-        release(err?: unknown): void;
-    }>;
-}
