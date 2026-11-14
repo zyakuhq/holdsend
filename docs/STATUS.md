@@ -2,10 +2,11 @@
 
 The project's working memory. Every work session reads this first and updates it last.
 
-Last updated: 2026-11-13 (0.2.0 published to npm; API record added)
+Last updated: 2026-11-14 (API review for 1.0 proposed; type-only fixes merged)
 
 ## Done
 
+- API review for 1.0 (2026-11-14, [#64](https://github.com/zyakuhq/holdsend/pull/64), [decision 0013](decisions/0013-api-review-for-1.0.md), proposed): read the whole 0.2.0 record. Fixed now, types only: `PoolLike` and `Unsubscribe` exported, `EmergencyOutbox.send` has an explicit return type, draft parameters named, and the API check fails on any type that points into an internal file. Proposed for 1.0: one kick/stop type, a freeze-or-exclude rule for drafts, a smaller `DraftState`, doc comments on the library's own `OutboxItem` fields, better docs for `ItemState` and `ItemStatus`. Not reviewed by a separate agent (no run-time code changed).
 - Public API record (2026-11-13, [#62](https://github.com/zyakuhq/holdsend/pull/62), [decision 0012](decisions/0012-api-record.md)): `scripts/api-surface.mjs` writes every entry point's declarations, plus the unexported types they refer to, to `api/*.api.txt`; `npm run check` and CI fail when the build differs. Phase 4 groundwork. Not reviewed by a separate agent (tooling only, no package code).
 - **0.2.0 published to npm (2026-11-13)**: all four packages, through trusted publishing and staged publishing, after the project lead's approvals (GitHub `npm-release`, then npm with a security key, core first). A manual dry-run of the Release workflow ran first. Checked by installing all four from npm in an empty folder and running `scripts/smoke-node.mjs` on Node 20.0.0 and 22; `npm audit signatures` verified the attestations of all four.
 - Phase 2 audit closed (2026-11-03), except one item that needs a real iPhone: a clock set back after writing now makes an item ask first (every outbox); `write()` refuses a future `writtenAt`, resets its flags when a store retries `decide`, and matches Unicode forms; the iOS multi-recipient SMS link encodes `+`; four more browser tests (service worker background sync, the one-day rule, two people on one browser, HTML shown as text), each checked to fail on broken code. The SMS hand-off record stays in apps for 0.2 ([audit](audits/2026-10-30-phase2-audit.md)).
@@ -62,7 +63,7 @@ Last updated: 2026-11-13 (0.2.0 published to npm; API record added)
 
 1. Show HN, now that 0.2.0 is out, after the project lead's yes (draft kept out of the repo).
 2. Check the SMS links on a real iPhone and a real Android phone (one recipient and several). Needs a person with the phones; until then the guide says to test on the phones your people use.
-3. Phase 4 groundwork that needs no device: use the API record to list what 1.0 should rename or remove (for example the early draft helpers), as a proposed decision.
+3. Phase 4: do the non-breaking parts of [decision 0013](decisions/0013-api-review-for-1.0.md) (alias `AutoFlusher` and `NativeAutoFlusher` to `FlushScheduler`, doc comments on `OutboxItem` fields and on `ItemState`/`ItemStatus`, the stored item format in protocol.md); leave the breaking items for the freeze.
 4. Phase 3: prove the Expo example's background task on Android with a development build (phone or emulator), and a check on a real low-end Android phone (the laptop measurements are in [low-end.md](low-end.md)). Before 0.3: `@holdsend/server` must depend on a core release with `./drafts`.
 
 ## After that
