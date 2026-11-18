@@ -27,7 +27,8 @@ import pg from "pg";
 import { PostgresIdempotencyStore, pgPoolTransaction, postgresSchema, handleIdempotent } from "@holdsend/server";
 
 const pool = new pg.Pool();
-await pool.query(postgresSchema()); // or copy the SQL into your migrations
+// Apply postgresSchema() through your deployment migration before starting the app.
+// Do not execute schema DDL on every application startup.
 
 const store = new PostgresIdempotencyStore({ db: pool, transaction: pgPoolTransaction(pool) });
 

@@ -5,6 +5,7 @@
 // never from anything the request says about itself.
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { NOTES_SCHEMA } from "./schema.mjs";
 import { build } from "esbuild";
 import express from "express";
 import {
@@ -18,25 +19,6 @@ import {
 } from "@holdsend/server";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
-
-const NOTES_SCHEMA = `
-CREATE TABLE IF NOT EXISTS notes (
-  id         BIGSERIAL PRIMARY KEY,
-  owner      TEXT NOT NULL,
-  text       TEXT NOT NULL,
-  written_at TIMESTAMPTZ,
-  arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS notes_owner_arrived_idx ON notes (owner, arrived_at DESC);
-CREATE TABLE IF NOT EXISTS emergency_messages (
-  id         BIGSERIAL PRIMARY KEY,
-  owner      TEXT NOT NULL,
-  text       TEXT NOT NULL,
-  written_at TIMESTAMPTZ,
-  arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS emergency_owner_arrived_idx ON emergency_messages (owner, arrived_at DESC);
-`;
 
 const DEMO_USER = /^[A-Za-z0-9-]{8,64}$/;
 const MAX_NOTE = 2000;
@@ -93,9 +75,15 @@ function noteJson(row) {
 
 export async function createNotesApp(options = {}) {
   const database = await openDatabase(options.databaseUrl);
-  // One statement per query: PGlite's query() takes a single statement.
-  for (const statement of `${postgresSchema()}\n${NOTES_SCHEMA}\n${postgresDraftSchema()}`.split(";").map((s) => s.trim()).filter(Boolean)) {
-    await database.db.query(statement);
+  // PGlite is ephemeral, so initialize its schema on every app creation.
+  // A real Postgres database must be migrated separately before the server
+  // starts. Never run schema DDL on every application instance startup:
+  // waiting DDL can queue incoming idempotency claims behind it.
+  if (!options.databaseUrl) {
+    // One statement per query: PGlite's query() takes a single statement.
+    for (const statement of `${postgresSchema()}\n${NOTES_SCHEMA}\n${postgresDraftSchema()}`.split(";").map((s) => s.trim()).filter(Boolean)) {
+      await database.db.query(statement);
+    }
   }
   const store = new PostgresIdempotencyStore({ db: database.db, transaction: database.transaction });
   const draftLog = new PostgresDraftLog({ db: database.db });

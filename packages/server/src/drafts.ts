@@ -131,7 +131,7 @@ export class MemoryDraftLog implements DraftLog<MemoryTx> {
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 
-/** The DDL for the Postgres draft log. Safe to run on every deploy. */
+/** The draft log's DDL. Run through a deployment migration, not on every application startup. */
 export function postgresDraftSchema(table = "holdsend_draft_updates"): string {
   if (!IDENTIFIER.test(table)) throw new TypeError(`invalid table name: ${table}`);
   return `

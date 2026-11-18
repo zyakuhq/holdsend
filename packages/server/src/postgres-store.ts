@@ -78,7 +78,7 @@ function shortHash(text: string): string {
   return h.toString(36);
 }
 
-/** The DDL for the store's table. Idempotent: safe to run on every deploy. */
+/** The store's DDL. Idempotent, but may acquire blocking locks; run through a deployment migration, not on application startup. */
 export function postgresSchema(table = "holdsend_idempotency"): string {
   const t = quoteTable(table);
   const base = `holdsend_${shortHash(table)}`;
