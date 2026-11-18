@@ -92,6 +92,12 @@ The wire contract is short and documented in [docs/protocol.md](docs/protocol.md
 
 Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Decisions and their reasons are recorded in [docs/decisions](docs/decisions).
 
+## Sponsors
+
+HoldSend is free and open source. If your app depends on it, you can [sponsor its maintenance on GitHub](https://github.com/sponsors/zyakuhq).
+
+Backer, Team and Company sponsors are listed here.
+
 ## Licence
 
 [Apache-2.0](LICENSE). Copyright 2026 Zyaku Inc. and HoldSend contributors.
