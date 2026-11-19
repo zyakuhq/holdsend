@@ -36,6 +36,7 @@ describe("B2: a background sync whose flush is wrapped in SenderLock.run", () =>
   it("asks the browser to try again when work remains or the lock was busy", async () => {
     for (const result of [
       { ran: true, via: "web-lock", value: { sent: 0, retry: 1, busy: 0, stuck: 0 } },
+      { ran: true, via: "web-lock", value: { sent: 1, retry: 0, busy: 0, stuck: 0, deferredOffline: true } },
       { ran: false },
     ]) {
       const { event, waited } = syncEvent();

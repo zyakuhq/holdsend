@@ -105,6 +105,8 @@ export interface FlushReport {
   busy: number;
   /** Items that became stuck in this flush. */
   stuck: number;
+  /** A pass stopped offline while sendable items for that pass still waited. */
+  deferredOffline?: boolean;
   /**
    * Set when items are held by another sender's claim: look again after this
    * many ms. If that sender died, its claim will then have gone stale and
@@ -258,6 +260,7 @@ export class Outbox<P = unknown> {
     }
     const run = (async () => {
       const total = emptyReport();
+      const offlineOwners = new Set<string | null>();
       let next: string | null = owner ?? null;
       try {
         for (;;) {
@@ -266,11 +269,29 @@ export class Outbox<P = unknown> {
           total.retry += report.retry;
           total.busy += report.busy;
           total.stuck += report.stuck;
+          if (report.deferredOffline) offlineOwners.add(next);
           if (report.nextCheckInMs !== undefined) {
             total.nextCheckInMs = Math.min(total.nextCheckInMs ?? Infinity, report.nextCheckInMs);
           }
           const [following] = this.queued;
           if (following === undefined) {
+            if (offlineOwners.size > 0) {
+              // A later pass may have sent an item skipped by an earlier,
+              // broader pass. Only ask for another wake if it still exists.
+              const items = await this.store.read();
+              const now = this.now();
+              const owners = [...offlineOwners];
+              const remains = items.some((item) => owners.some((deferredOwner) => isSendable(item, now, this.policy, deferredOwner ?? undefined)));
+              // A flush may have been queued during the read. Run it before
+              // resolving, as with a flush queued during any other await.
+              const [late] = this.queued;
+              if (late !== undefined) {
+                this.queued.delete(late);
+                next = late;
+                continue;
+              }
+              if (remains) total.deferredOffline = true;
+            }
             // Checking the queue and finishing happen in one synchronous
             // step, so a flush asked for from now on starts a new run
             // instead of being queued behind one that is already over.
@@ -301,8 +322,12 @@ export class Outbox<P = unknown> {
       .sort((a, b) => a.writtenAt - b.writtenAt)
       .map((i) => i.key);
 
+    let stoppedOffline = false;
     for (const key of candidates) {
-      if (!this.isOnline()) break;
+      if (!this.isOnline()) {
+        stoppedOffline = true;
+        break;
+      }
       const token = this.makeKey();
       const claimed = await this.store.update((items) => claim(items, key, token, this.now(), this.policy, owner));
       if (!claimed) continue;
@@ -326,6 +351,7 @@ export class Outbox<P = unknown> {
       return nextWakeMs(items, this.now(), this.policy, owner);
     });
     if (waitMs !== undefined) report.nextCheckInMs = waitMs;
+    if (stoppedOffline) report.deferredOffline = true;
     return report;
   }
 

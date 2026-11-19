@@ -59,6 +59,7 @@ interface FlushReport {
     retry: number;
     busy: number;
     stuck: number;
+    deferredOffline?: boolean;
     nextCheckInMs?: number;
 }
 

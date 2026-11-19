@@ -4,6 +4,7 @@ All notable changes to the `@holdsend` packages. All four packages share one ver
 
 ## Unreleased
 
+- A flush that stops because connectivity disappeared now sets the optional `FlushReport.deferredOffline` flag when sendable items remain. Browser Background Sync treats that as unfinished work and rejects the event so the browser may retry, subject to its retry limit. Items waiting for a person's confirmation do not trigger a retry.
 - CI runs the Expo example's Android background task on an emulator (Android 14, release build): a note written while the server is unreachable is sent by the task, in a process Android started with no screen, and published once. Only when the code it covers changes; it forces the job, so it does not show how often Android runs it. Decision 0016.
 - The Expo example's release build crashed at launch: Expo's template turns R8 on, and R8 removed the constructor Room uses for WorkManager's database (which `expo-background-task` runs on). The example now keeps it with a small config plugin, `examples/expo/plugins/keep-work-database.js`. If your app uses `expo-background-task` with R8, check a release build. No package code changed.
 - **Breaking (drafts, early API):** `DraftState` keeps only what a screen acts on. `count`, `repeats` and `dangling` moved under `log` (type `DraftLogInfo`): `state.count` is now `state.log.count`. Applies to `readDraft` and `readDraftState`. Decision 0015, which also sets when drafts join the 1.0 promise. Edits listed in docs/upgrading.md.
