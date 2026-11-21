@@ -244,7 +244,6 @@ export function approve(items: OutboxItem[], key: string, now: number, newKey: (
   const replaced = item.state === "stuck" && item.stuckReason === "key_conflict";
   if (replaced) item.key = newKey();
   freshStart(item);
-  delete item.lastError;
   return { ok: true, key: item.key, newKey: replaced };
 }
 
@@ -259,6 +258,8 @@ function freshStart(item: OutboxItem): void {
   delete item.failures;
   delete item.noAnswerSince;
   delete item.timeouts;
+  delete item.lastError;
+  delete item.lastAttempt;
 }
 
 /**
@@ -298,8 +299,6 @@ export function retry(items: OutboxItem[], key: string, now: number, newKey: () 
   const replaced = item.stuckReason === "key_conflict";
   if (replaced) item.key = newKey();
   freshStart(item);
-  delete item.lastError;
-  delete item.lastAttempt;
   return { ok: true, key: item.key, newKey: replaced };
 }
 

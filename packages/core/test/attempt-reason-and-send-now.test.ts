@@ -4,7 +4,7 @@
  * same keys, without waiting for backoff.
  */
 import { describe, expect, it } from "vitest";
-import { claim, isSendable, retry, settle } from "../src/transitions.js";
+import { approve, claim, isSendable, retry, settle, statusOf } from "../src/transitions.js";
 import { DEFAULT_POLICY, ERROR_IN_PROGRESS, ERROR_KEY_CONFLICT, MemoryStore, Outbox, classifyResponse, classifyThrown, type AttemptOutcome, type OutboxItem } from "../src/index.js";
 import { FakeServer } from "./fake-server.js";
 
@@ -55,6 +55,28 @@ describe("lastAttempt: why the last attempt did not finish", () => {
     expect(stuck[0]!.lastAttempt).toBe("refused");
     expect(retry(stuck, "item-0001", T0, () => "item-0002", DEFAULT_POLICY)).toMatchObject({ ok: true, newKey: false });
     expect(stuck[0]!.lastAttempt).toBeUndefined();
+  });
+
+  it("is cleared when a person approves an item that grew old while stuck", () => {
+    const items = sending();
+    settle(items, "item-0001", "t", classifyResponse(400), T0, DEFAULT_POLICY);
+    expect(items[0]!.lastAttempt).toBe("refused");
+    const later = T0 + DEFAULT_POLICY.confirmAfterMs + 1;
+    // Old enough to need confirmation, so Try again does not apply; Send does.
+    expect(retry(items, "item-0001", later, () => "item-0002", DEFAULT_POLICY)).toEqual({ ok: false, reason: "not_stuck" });
+    expect(approve(items, "item-0001", later, () => "item-0002", DEFAULT_POLICY)).toMatchObject({ ok: true, newKey: false });
+    expect(items[0]!.lastAttempt).toBeUndefined();
+    expect(items[0]!.lastError).toBeUndefined();
+  });
+
+  it("is missing after a sender died on the last allowed attempt, and the item shows as stuck", () => {
+    const policy = { ...DEFAULT_POLICY, maxAttempts: 1 };
+    const items: OutboxItem[] = [{ key: "item-0001", kind: "post", payload: {}, writtenAt: T0, state: "waiting", attempts: 0, touched: false }];
+    expect(claim(items, "item-0001", "t", T0, policy)).not.toBeNull();
+    const later = T0 + policy.staleClaimMs + 1;
+    expect(statusOf(items[0]!, later, policy)).toBe("stuck");
+    expect(items[0]!.state).toBe("sending");
+    expect(items[0]!.lastAttempt).toBeUndefined();
   });
 
   it("is never used to decide whether to send", () => {

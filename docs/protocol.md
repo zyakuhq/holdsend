@@ -103,7 +103,9 @@ What a `Store` keeps on the device is a JSON array of `OutboxItem` objects (see 
 | `"server_busy"` | The server answered "not now": 408, 429 or 5xx (also 401, 403 and 425, which may change by themselves, and 409 `in_progress` while the server is still working on this key). | It is retried automatically, with growing waits. |
 | `"refused"` | The server refused the request: any other 4xx, or 409 `key_conflict` (the key holds different content). | Sending the same request again will not help. The item is stuck until a person retries or discards it. |
 
-"No connection" is not a value: it is the device's state right now, not something about the item, so read it from the platform when you draw the screen. `lastAttempt` is cleared when the item is delivered and when a person retries it.
+"No connection" is not a value: it is the device's state right now, not something about the item, so read it from the platform when you draw the screen. `lastAttempt` is cleared when the item is delivered and when a person retries or approves it.
+
+One case has no value: a sender that died during the item's last allowed attempt. Nothing takes the item over, so nothing records the lost answer. `statusOf` shows it as `stuck` while its `state` is still `"sending"`; tell the person what `"no_answer"` says, because it may already be on the server.
 
 `outbox.sendNow(owner)` is the person's "Send now": one pass over the same queue, with the same items and the same keys, without waiting for the backoff of earlier failures. Items that wait for a person (stuck, or needing confirmation) still need `retry()` or `approve()`.
 

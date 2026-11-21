@@ -109,7 +109,10 @@ export interface OutboxItem<P = unknown> {
   /**
    * Why the last attempt did not end in a confirmed delivery, when it did
    * not. Kept by the library for display; cleared on delivery and when a
-   * person retries. Never used to decide whether to send.
+   * person retries or approves. Never used to decide whether to send. A
+   * sender that died during the item's last allowed attempt leaves no value:
+   * the item shows as `stuck` while its `state` is still `"sending"`, and it
+   * may already be on the server, like `"no_answer"`.
    */
   lastAttempt?: AttemptReason;
   /** When the server confirmed it (epoch ms, device clock). */
