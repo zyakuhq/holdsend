@@ -16,6 +16,15 @@ What to change in your code when you move to a new release. Releases before 1.0 
 
   `conflicted`, `heads`, `latest`, `unresolved` and `ids` did not change. The new type of `state.log` is `DraftLogInfo`, exported from `@holdsend/core/drafts`. TypeScript reports every place to edit.
 
+### Behaves differently (no code edit, but check)
+
+These do not change any type, so TypeScript will not point at them.
+
+- **`postgresSchema()` (`@holdsend/server`) must be sent whole.** The text now holds a `DO` block. If you or a migration tool split it on `;` and send one statement at a time, the split pieces fail. Send the whole string in one `query()` call, or copy it into one migration file. In return, running it at startup no longer locks the table when the column and indexes already exist, and two instances that start at once wait for each other instead of one failing. [Decision 0019](decisions/0019-schema-without-boot-locks.md).
+- **`onBackgroundSync` (`@holdsend/web`) also rejects when the device went offline before or during the flush** and sendable items were left. In 0.2 that flush counted as done, so the browser dropped the sync and the items waited for the app's next flush. Now the browser may wake the service worker again, a few times at most. If your worker logs or reports a rejected sync as an error, expect more of them on bad connections. [Decision 0018](decisions/0018-offline-mid-flush.md).
+- **`runBackgroundFlush` (`@holdsend/react-native`) returns `waiting` with `retryLater: true`** in the same case, including when the outbox was already offline at the start (0.2 said `done`). If you map the outcome to your background task library's result, check what you do with `waiting`.
+- `FlushReport` has a new optional field, `deferredOffline: true`, for that case. If your own code decides whether work remains from a flush report, read it too.
+
 ### May change (old code keeps working)
 
 - `AutoFlusher` (`@holdsend/web`) and `NativeAutoFlusher` (`@holdsend/react-native`) are deprecated names for `FlushScheduler` from `@holdsend/core`. The shapes are the same. The old names stay until 2.0.
