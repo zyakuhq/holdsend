@@ -8,6 +8,7 @@ export default defineConfig({
     // Tests run against the source of every package, so no build is needed first.
     alias: [
       { find: /^@holdsend\/core\/emergency$/, replacement: src("core", "emergency") },
+      { find: /^@holdsend\/core\/drafts$/, replacement: src("core", "drafts") },
       { find: /^@holdsend\/core$/, replacement: src("core") },
       { find: /^@holdsend\/server$/, replacement: src("server") },
       { find: /^@holdsend\/web$/, replacement: src("web") },
