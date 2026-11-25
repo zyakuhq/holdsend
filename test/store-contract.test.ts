@@ -84,7 +84,53 @@ class BoxStore implements Store<Payload> {
   }
 }
 
-const broken: Record<string, { store: (box: Box) => Store<Payload>; breaks: string }> = {
+/**
+ * `shared`: every open() of a harness gives the same store object over one
+ * box. `perOpen`: every open() gives a new store object over the same box.
+ * `fresh`: every open() gives a new store over a new, empty box.
+ */
+type Opens = "shared" | "perOpen" | "fresh";
+
+const broken: Record<string, { store: (box: Box) => Store<Payload>; breaks: string; opens?: Opens }> = {
+  "serialises updates only within one store object": {
+    breaks: "concurrent updates from two stores over the same items never lose a write",
+    opens: "perOpen",
+    store: (box) =>
+      new (class extends BoxStore {
+        private chain: Promise<unknown> = Promise.resolve();
+        override update<T>(fn: (items: OutboxItem<Payload>[]) => T): Promise<T> {
+          const run = this.chain.then(async () => {
+            const working = JSON.parse(this.box.json) as OutboxItem<Payload>[];
+            await tick();
+            const result = fn(working);
+            this.box.json = JSON.stringify(working);
+            return result;
+          });
+          this.chain = run.catch(() => undefined);
+          return run;
+        }
+      })(box),
+  },
+  "clears everything, then writes items back one at a time": {
+    breaks: "a read during updates sees a whole update or none of it",
+    opens: "perOpen",
+    store: (box) =>
+      new (class extends BoxStore {
+        private chain: Promise<unknown> = Promise.resolve();
+        override update<T>(fn: (items: OutboxItem<Payload>[]) => T): Promise<T> {
+          const run = this.chain.then(async () => {
+            const working = JSON.parse(this.box.json) as OutboxItem<Payload>[];
+            const result = fn(working);
+            this.box.json = "[]";
+            await tick();
+            this.box.json = JSON.stringify(working);
+            return result;
+          });
+          this.chain = run.catch(() => undefined);
+          return run;
+        }
+      })(box),
+  },
   "reads, waits, then writes": {
     breaks: "concurrent updates from two stores over the same items never lose a write",
     store: (box) =>
@@ -196,35 +242,39 @@ const broken: Record<string, { store: (box: Box) => Store<Payload>; breaks: stri
       })(box),
   },
   "says durable while it keeps nothing": {
-    breaks: "isDurable says whether items survive a restart",
-    store: (box) =>
-      new (class extends BoxStore {
-        override async isDurable() {
-          return true;
-        }
-      })(box),
+    breaks: "a store that says durable keeps items for a new store",
+    opens: "fresh",
+    store: (box) => new BoxStore(box),
   },
 };
 
 describe("Store contract checks catch broken stores", () => {
-  it.each(Object.entries(broken))("%s", async (_name, { store, breaks }) => {
+  it.each(Object.entries(broken))("%s", async (_name, { store, breaks, opens = "shared" }) => {
     const check = contractChecks.find((c) => c.name === breaks);
     expect(check, breaks).toBeDefined();
-    // The last broken store claims durable while the harness says it is not.
-    const durable = breaks !== "isDurable says whether items survive a restart";
     const make = (): StoreHarness => {
       const box: Box = { json: "[]" };
       const shared = store(box);
-      return { open: () => shared, durable };
+      const open = { shared: () => shared, perOpen: () => store(box), fresh: () => store({ json: "[]" }) }[opens];
+      return { open, durable: true };
     };
     await expect(check!.run(make)).rejects.toThrow(/store contract/);
   });
 
-  it("a store that keeps the contract passes every check over the same harness", async () => {
+  it("a store that keeps the contract passes every check, also with fields in another order", async () => {
     for (const check of contractChecks) {
       await check.run(() => {
         const box: Box = { json: "[]" };
-        return { open: () => new BoxStore(box), durable: true };
+        return {
+          open: () =>
+            new (class extends BoxStore {
+              // Rebuilt from "columns": the same fields, in reverse order.
+              override async read() {
+                return (await super.read()).map((item) => Object.fromEntries(Object.entries(item).reverse()) as unknown as OutboxItem<Payload>);
+              }
+            })(box),
+          durable: true,
+        };
       });
     }
   });

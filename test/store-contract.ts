@@ -8,6 +8,7 @@
  * store over it, like a new tab or an app restart). Two stores from the same
  * harness share their items.
  */
+import { isDeepStrictEqual } from "node:util";
 import type { OutboxItem, Store } from "@holdsend/core";
 
 export type Payload = { text: string; tags?: string[]; nested?: { n: number; list: unknown[] } };
@@ -34,9 +35,10 @@ function byKey(items: OutboxItem<Payload>[]): OutboxItem<Payload>[] {
 }
 
 function same(actual: unknown, expected: unknown, what: string): void {
+  // Compared as plain JSON values, so the order of fields in an object does not matter.
   const a = JSON.stringify(actual);
   const e = JSON.stringify(expected);
-  if (a !== e) fail(`${what}\n  expected ${e}\n  got      ${a}`);
+  if (!isDeepStrictEqual(a === undefined ? a : JSON.parse(a), e === undefined ? e : JSON.parse(e))) fail(`${what}\n  expected ${e}\n  got      ${a}`);
 }
 
 export function plainItem(key: string, text = key): OutboxItem<Payload> {
@@ -214,18 +216,25 @@ export const contractChecks: ContractCheck[] = [
       }
       await writes;
       for (const items of reads) {
+        if (items.length !== 2) fail(`a read in the middle of updates saw ${items.length} items instead of 2`);
         const [a, b] = byKey(items);
         if (a?.attempts !== b?.attempts) fail(`a read saw half an update: ${a?.attempts} and ${b?.attempts}`);
       }
     },
   },
   {
-    name: "isDurable says whether items survive a restart",
+    name: "a store that says durable keeps items for a new store",
     async run(make) {
       const harness = make();
-      const durable = await harness.open().isDurable();
+      const store = harness.open();
+      const durable = await store.isDurable();
       if (typeof durable !== "boolean") fail(`isDurable() should give a boolean, got ${String(durable)}`);
       same(durable, harness.durable, "isDurable()");
+      if (!durable) return;
+      await store.update((items) => {
+        items.push(plainItem("k-durable"));
+      });
+      same(await harness.open().read(), [plainItem("k-durable")], "items read by a new store after a durable store saved them");
     },
   },
 ];
