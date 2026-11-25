@@ -5,6 +5,7 @@
 // never from anything the request says about itself.
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { NOTES_SCHEMA } from "./schema.mjs";
 import { build } from "esbuild";
 import express from "express";
 import {
@@ -18,25 +19,6 @@ import {
 } from "@holdsend/server";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
-
-const NOTES_SCHEMA = `
-CREATE TABLE IF NOT EXISTS notes (
-  id         BIGSERIAL PRIMARY KEY,
-  owner      TEXT NOT NULL,
-  text       TEXT NOT NULL,
-  written_at TIMESTAMPTZ,
-  arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS notes_owner_arrived_idx ON notes (owner, arrived_at DESC);
-CREATE TABLE IF NOT EXISTS emergency_messages (
-  id         BIGSERIAL PRIMARY KEY,
-  owner      TEXT NOT NULL,
-  text       TEXT NOT NULL,
-  written_at TIMESTAMPTZ,
-  arrived_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS emergency_owner_arrived_idx ON emergency_messages (owner, arrived_at DESC);
-`;
 
 const DEMO_USER = /^[A-Za-z0-9-]{8,64}$/;
 const MAX_NOTE = 2000;
@@ -93,12 +75,12 @@ function noteJson(row) {
 
 export async function createNotesApp(options = {}) {
   const database = await openDatabase(options.databaseUrl);
-  // Sent whole (postgresSchema() holds a DO block, so it cannot be split on
-  // ";"): PGlite takes several statements through exec(), node-postgres
-  // through query() without parameters.
-  const schema = `${postgresSchema()}\n${NOTES_SCHEMA}\n${postgresDraftSchema()}`;
-  if (typeof database.db.exec === "function") await database.db.exec(schema);
-  else await database.db.query(schema);
+  // PGlite is ephemeral, so initialize its schema on every app creation.
+  // Real PostgreSQL must be migrated before application startup.
+  if (!options.databaseUrl) {
+    const schema = `${postgresSchema()}\n${NOTES_SCHEMA}\n${postgresDraftSchema()}`;
+    await database.db.exec(schema);
+  }
   const store = new PostgresIdempotencyStore({ db: database.db, transaction: database.transaction });
   const draftLog = new PostgresDraftLog({ db: database.db });
 

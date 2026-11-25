@@ -27,7 +27,9 @@ import pg from "pg";
 import { PostgresIdempotencyStore, pgPoolTransaction, postgresSchema, handleIdempotent } from "@holdsend/server";
 
 const pool = new pg.Pool();
-await pool.query(postgresSchema()); // or copy the SQL into your migrations; send it whole, it holds a DO block
+// Apply postgresSchema() through your deployment migration before starting the app.
+// Send the SQL whole: it contains a PostgreSQL DO block.
+// Do not execute schema DDL on every application startup.
 
 const store = new PostgresIdempotencyStore({ db: pool, transaction: pgPoolTransaction(pool) });
 
@@ -87,8 +89,6 @@ Access-Control-Expose-Headers: Idempotent-Replayed
 - `MemoryIdempotencyStore`: the same contract in memory, for tests.
 
 Both pass the same contract test suite.
-
-`postgresSchema()` is safe to run at every start: once the table, its column and its indexes exist, it takes no lock on the table, so a backup or a long transaction does not hold up claims while an instance starts. When something is missing (the first deploy, or an upgrade that adds a column or an index) it does lock the table and waits for such a transaction. For those deploys, run it with a short lock timeout and retry when it times out, for example `await pool.query("SET LOCAL lock_timeout = '2s';\n" + postgresSchema())` (`SET LOCAL` lasts only for this text, so pooled connections are not left with the timeout), or run it in your migrations instead of at start. Two instances that start at once wait for each other on an advisory lock instead of failing.
 
 ## One draft on two devices (early)
 

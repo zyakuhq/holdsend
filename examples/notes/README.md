@@ -45,3 +45,14 @@ Open http://localhost:3000. It uses PGlite (Postgres in WebAssembly, in memory) 
 ## Licence
 
 Apache-2.0
+## Using PostgreSQL
+
+Apply the schema as a separate deployment step before starting the application:
+
+`DATABASE_URL=postgres://... npm run migrate --workspace holdsend-example-notes`
+
+`npm start --workspace holdsend-example-notes`
+
+The migration runs inside a transaction with a 500 ms lock timeout by default. If a required lock cannot be acquired within that time, the migration rolls back and exits with an error. Configure `MIGRATION_LOCK_TIMEOUT_MS` to change the timeout.
+
+Application startup does not execute schema DDL against PostgreSQL. Keep schema migrations separate from request-serving application instances.
