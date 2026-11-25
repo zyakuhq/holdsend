@@ -84,7 +84,7 @@ A bad value never fails the request. The item is stored without a written time.
 
 ## The stored item format
 
-What a `Store` keeps on the device is a JSON array of `OutboxItem` objects (see `packages/core/src/types.ts`). A custom store must save each item exactly as it gets it and return it unchanged: no field renamed, dropped or converted.
+What a `Store` keeps on the device is a JSON array of `OutboxItem` objects (see `packages/core/src/types.ts`). A custom store must save each item exactly as it gets it and return it unchanged: no field renamed, dropped or converted. Order is not kept: a store may return items in any order. The checks in [test/store-contract.ts](../test/store-contract.ts) test a store against these rules.
 
 | Field | Set by | Meaning |
 | --- | --- | --- |

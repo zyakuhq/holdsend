@@ -10,6 +10,11 @@
  * A store keeps its own copies: it must not hold on to the item objects it is
  * given, or hand out objects it keeps, since callers may change them.
  *
+ * Order is not part of the contract: `read` and `update` may give items in
+ * any order (the outbox sorts by written time itself). The outbox never leaves
+ * two items with the same key, so a store may index items by key. The checks in the repository's test/store-contract.ts cover all of
+ * this; copy them to test a store of your own.
+ *
  * Items must survive app close, force-close and reload. A store that knows it
  * cannot promise that (memory only, blocked storage) must say so through
  * `isDurable`, so the app can warn the person before they close it. Some

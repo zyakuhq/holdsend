@@ -32,7 +32,7 @@ HoldSend is not 1.0 yet, and its README will not say "ready for production" unti
 - [ ] **Each item's status is visible to the person**: waiting, sending, needs confirmation, stuck, sent. Use `ItemStatus`, not `ItemState`.
 - [ ] **Stuck items offer Try again and Discard**, and a `retry()` that reports `newKey: true` asks before sending, because only that case can publish twice.
 - [ ] **Items that need confirmation show when they were written** before the person presses Send.
-- [ ] **A custom `Store` keeps the `Store` contract**: each `update` is atomic, it keeps its own copies, and it saves items unchanged. There is no published test suite for client stores yet, so use the built-in stores where you can. ([stored item format](protocol.md#the-stored-item-format))
+- [ ] **A custom `Store` keeps the `Store` contract**: each `update` is atomic, it keeps its own copies, and it saves items unchanged. Run it through the checks in [test/store-contract.ts](../test/store-contract.ts) (copy the file; it is not published as a package), and use the built-in stores where you can. ([stored item format](protocol.md#the-stored-item-format))
 - [ ] **Emergency messages, if you use them**: the screen says it is not an emergency service and tells people to call their local emergency number first; SMS links are tested on the phones your people use. ([emergency messages](emergency.md))
 - [ ] **Drafts on two devices, if you use them**: the API is early. It changed in 0.3 ([upgrading](upgrading.md)), and any further change keeps it outside the 1.0 promise until 1.1 ([decision 0015](decisions/0015-drafts-and-the-1.0-promise.md)). ([drafts](drafts.md))
 

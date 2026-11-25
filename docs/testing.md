@@ -48,5 +48,6 @@ A test that passes against broken code proves nothing. Each of these deliberate 
 ## Other suites
 
 - **Store contract** (`packages/server/test/store-contract.test.ts`): the same rules against the in-memory store and a real Postgres engine (PGlite), including thirty concurrent copies of one request creating one row.
+- **Client store contract** (`test/store-contract.ts`, run by `test/store-contract.test.ts`): nine checks of the `Store` rules (atomic updates across two stores, own copies in and out, nothing saved when `fn` throws, every field back unchanged after a reopen, no half-written read, `isDurable`) against `MemoryStore`, `IndexedDbStore`, and `KeyValueStore` over AsyncStorage and MMKV fakes. Eight deliberately broken stores show that each check can fail. Order is not checked: stores may return items in any order ([decision 0021](decisions/0021-client-store-contract-checks.md)).
 - **Platform stores**: IndexedDB through a spec-following implementation, two "tabs" on one database; AsyncStorage and MMKV fakes that yield like the real bridge.
 - **Core rules**: claims, settling, cancel, approve, retry and discard as pure functions.
