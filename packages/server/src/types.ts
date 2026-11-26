@@ -89,6 +89,9 @@ export interface StoreOptions {
    * A claim older than this whose owner never completed or released it is
    * presumed dead and may be taken over. Safe because a dead owner never
    * committed. Default 5 minutes. Must be longer than your slowest create.
+   * Only the same request (the same hash) may take a stale claim over: a
+   * different request under its key is still a conflict, because the device
+   * that sent the first may retry it.
    */
   staleClaimMs?: number;
   /**
@@ -121,6 +124,8 @@ export interface IdempotencyStore<Tx = unknown> {
    * created it becomes a tombstone: a late retry is answered "gone" instead
    * of creating the resource again. The stored request hash and result are
    * cleared, so a tombstone keeps nothing derived from what the person wrote.
+   * A tombstone has no expiry, even when completedTtlMs is set, and purging
+   * never removes it. Returns how many records became tombstones.
    */
   tombstoneResource(tx: Tx, resource: ResourceId): Promise<number>;
   /**

@@ -38,6 +38,7 @@ function memoryHarness(): IdempotencyStoreHarness {
     async rows() {
       return [...rows].sort();
     },
+    concurrentTransactions: true,
   };
 }
 
@@ -79,6 +80,13 @@ type Flaw =
   | "racy claim"
   | "hands out a second claim while one is in progress"
   | "ignores the owner in keys"
+  | "joins key parts with a colon"
+  | "treats a claim with no time as time zero"
+  | "checks the token only when completion is called"
+  | "tombstones every operation's records"
+  | "keeps a tombstone's expiry"
+  | "purges tombstones"
+  | "forgets every owner whose name starts with the one given"
   | "drops headers on replay"
   | "replays any request under a completed key"
   | "lets another request share a claim in progress"
@@ -98,6 +106,7 @@ type Flaw =
 
 interface Rec {
   owner: string;
+  operation: string;
   hash: string;
   state: "in_progress" | "completed" | "gone";
   token?: string;
@@ -113,7 +122,7 @@ interface Tx {
 }
 
 const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const tick = () => new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 3)));
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 let tokens = 0;
 
 class FlawedStore implements IdempotencyStore<Tx> {
@@ -130,11 +139,12 @@ class FlawedStore implements IdempotencyStore<Tx> {
   }
 
   private id(r: RecordId) {
+    if (this.has("joins key parts with a colon")) return `${r.owner}:${r.operation}:${r.key}`;
     return JSON.stringify([this.has("ignores the owner in keys") ? "" : r.owner, r.operation, r.key]);
   }
 
   async claim(input: ClaimInput): Promise<ClaimOutcome> {
-    const now = input.now ?? this.clock.now;
+    const now = input.now ?? (this.has("treats a claim with no time as time zero") ? 0 : this.clock.now);
     const k = this.id(input);
     let r = this.records.get(k);
     if (this.has("racy claim")) await tick();
@@ -144,7 +154,7 @@ class FlawedStore implements IdempotencyStore<Tx> {
     }
     if (!r) {
       const token = `t${(tokens += 1)}`;
-      this.records.set(k, { owner: input.owner, hash: input.requestHash, state: "in_progress", token, claimedAt: now });
+      this.records.set(k, { owner: input.owner, operation: input.operation, hash: input.requestHash, state: "in_progress", token, claimedAt: now });
       return { type: "claimed", token };
     }
     if (r.state === "gone") return { type: "gone" };
@@ -202,7 +212,7 @@ class FlawedStore implements IdempotencyStore<Tx> {
     };
     if (this.has("completes outside the transaction")) apply();
     else {
-      tx.checks.push(check);
+      if (!this.has("checks the token only when completion is called")) tx.checks.push(check);
       tx.changes.push(apply);
     }
   }
@@ -215,17 +225,20 @@ class FlawedStore implements IdempotencyStore<Tx> {
 
   async tombstoneResource(tx: Tx, { owner, operation, resourceRef }: ResourceId): Promise<number> {
     const matches = () =>
-      [...this.records.entries()].filter(([k, r]) => {
-        const [, op] = JSON.parse(k) as string[];
-        return (r.owner === owner || this.has("tombstones every owner's records")) && op === operation && r.ref === resourceRef && r.state === "completed";
-      });
+      [...this.records.values()].filter(
+        (r) =>
+          (r.owner === owner || this.has("tombstones every owner's records")) &&
+          (r.operation === operation || this.has("tombstones every operation's records")) &&
+          r.ref === resourceRef &&
+          r.state === "completed",
+      );
     const count = matches().length;
     const apply = () => {
-      for (const [, r] of matches()) {
+      for (const r of matches()) {
         r.state = "gone";
         r.hash = "";
         delete r.result;
-        delete r.expiresAt;
+        if (!this.has("keeps a tombstone's expiry")) delete r.expiresAt;
       }
     };
     if (this.has("tombstones outside the transaction")) apply();
@@ -236,7 +249,8 @@ class FlawedStore implements IdempotencyStore<Tx> {
   async purgeExpired(now: number = this.clock.now): Promise<number> {
     let n = 0;
     for (const [k, r] of this.records) {
-      const stale = r.state === "in_progress" && (now - r.claimedAt > this.staleMs || this.has("purges fresh claims"));
+      const old = now - r.claimedAt > this.staleMs;
+      const stale = (r.state === "in_progress" && (old || this.has("purges fresh claims"))) || (r.state === "gone" && old && this.has("purges tombstones"));
       if (stale || (r.expiresAt !== undefined && r.expiresAt <= now)) {
         this.records.delete(k);
         n += 1;
@@ -248,7 +262,7 @@ class FlawedStore implements IdempotencyStore<Tx> {
   async forgetOwner(owner: string): Promise<number> {
     let n = 0;
     for (const [k, r] of this.records) {
-      if (r.owner !== owner) continue;
+      if (r.owner !== owner && !(this.has("forgets every owner whose name starts with the one given") && r.owner.startsWith(owner))) continue;
       if (r.state === "gone" && this.has("keeps tombstones when forgetting an owner")) continue;
       this.records.delete(k);
       n += 1;
@@ -270,36 +284,60 @@ function flawedHarness(flaw: Flaw | undefined): IdempotencyStoreHarness {
     async rows() {
       return [...rows].sort();
     },
+    concurrentTransactions: true,
   };
 }
 
-const caughtBy: Record<Flaw, string> = {
-  "racy claim": "exactly one of many concurrent claims wins",
-  "hands out a second claim while one is in progress": "a claim in progress is reported as in progress",
-  "ignores the owner in keys": "keys are scoped by owner and operation",
-  "drops headers on replay": "a completed request is replayed with its result unchanged",
-  "replays any request under a completed key": "a different request under a used key is a conflict",
-  "lets another request share a claim in progress": "a different request under a used key is a conflict",
-  "never lets a stale claim be taken over": "a stale claim can be taken over, and the old holder can no longer complete",
-  "completes outside the transaction": "a completion and the app's row commit together or not at all",
-  "completes without checking the token": "only the claim's own token can complete it, and only once",
-  "throws a plain Error for a lost claim": "only the claim's own token can complete it, and only once",
-  "commits when the callback throws": "a completion and the app's row commit together or not at all",
-  "swallows the callback's error": "a completion and the app's row commit together or not at all",
-  "releases for any token": "a release frees the key, but only by the token that holds it",
-  "tombstones every owner's records": "a deleted resource's key answers gone, and only that owner's",
-  "tombstones outside the transaction": "a deleted resource's key answers gone, and only that owner's",
-  "keeps the caller's result object": "the store keeps its own copy of a result",
-  "expires completed records after 30 days by default": "completed records are kept forever unless a lifetime is set",
-  "purges fresh claims": "purging removes stale unfinished claims and nothing else",
-  "keeps tombstones when forgetting an owner": "forgetting an owner removes all of their records and nobody else's",
+const STALE_CHECK = "a stale claim can be taken over, and the old holder can no longer complete";
+const TOKEN_CHECK = "only the claim's own token can complete it, and only once";
+const ATOMIC_CHECK = "a completion and the app's row commit together or not at all";
+const GONE_CHECK = "a deleted resource's key answers gone, and only that owner's";
+const SCOPE_CHECK = "keys are scoped by owner and operation";
+const PURGE_CHECK = "purging removes stale unfinished claims and nothing else";
+
+/** For each flaw: the check that must fail, and words from the failure it must fail with. */
+const caughtBy: Record<Flaw, [check: string, failure: string]> = {
+  "racy claim": ["exactly one of many concurrent claims wins", "claims won by 25 concurrent requests"],
+  "hands out a second claim while one is in progress": ["a claim in progress is reported as in progress", "the same request while the first is in progress"],
+  "ignores the owner in keys": [SCOPE_CHECK, "the same key from another owner"],
+  "joins key parts with a colon": [SCOPE_CHECK, "whose parts joined would match another's"],
+  "drops headers on replay": ["a completed request is replayed with its result unchanged", "a repeat of the completed request"],
+  "replays any request under a completed key": ["a different request under a used key is a conflict", "another request under a completed key"],
+  "lets another request share a claim in progress": ["a different request under a used key is a conflict", "another request under a key in progress"],
+  "never lets a stale claim be taken over": [STALE_CHECK, "the store's clock says the claim is stale"],
+  "treats a claim with no time as time zero": [STALE_CHECK, "a claim with no time"],
+  "checks the token only when completion is called": ["a completion re-checks its claim when it commits", "did not throw ClaimLostError"],
+  "completes outside the transaction": [ATOMIC_CHECK, "the key after a rolled-back completion"],
+  "completes without checking the token": [TOKEN_CHECK, "with a token the store never gave"],
+  "throws a plain Error for a lost claim": [TOKEN_CHECK, "not ClaimLostError"],
+  "commits when the callback throws": [ATOMIC_CHECK, "app rows after the transaction rolled back"],
+  "swallows the callback's error": [ATOMIC_CHECK, "resolved although its callback threw"],
+  "releases for any token": ["a release frees the key, but only by the token that holds it", "a release by a token that lost the claim"],
+  "tombstones every owner's records": [GONE_CHECK, "records tombstoned for one resource"],
+  "tombstones every operation's records": [GONE_CHECK, "records tombstoned for one resource"],
+  "tombstones outside the transaction": [GONE_CHECK, "a tombstone that rolled back"],
+  "keeps a tombstone's expiry": [GONE_CHECK, "with a 7-day lifetime for completed records"],
+  "keeps the caller's result object": ["the store keeps its own copy of a result", "the caller changed the objects"],
+  "expires completed records after 30 days by default": ["completed records are kept forever unless a lifetime is set", "with no lifetime set"],
+  "purges fresh claims": [PURGE_CHECK, "while the claim is fresh"],
+  "purges tombstones": [PURGE_CHECK, "records purged once the claim is stale"],
+  "keeps tombstones when forgetting an owner": ["forgetting an owner removes all of their records and nobody else's", "records removed for one owner"],
+  "forgets every owner whose name starts with the one given": [
+    "forgetting an owner removes all of their records and nobody else's",
+    "records removed for one owner",
+  ],
 };
 
 describe("IdempotencyStore contract checks catch broken stores", () => {
-  it.each(Object.entries(caughtBy))("%s", async (flaw, name) => {
+  it.each(Object.entries(caughtBy))("%s", async (flaw, [name, failure]) => {
     const check = idempotencyContractChecks.find((c) => c.name === name);
     expect(check, name).toBeDefined();
-    await expect(check!.run(flawedHarness(flaw as Flaw))).rejects.toThrow(/idempotency store contract/);
+    const error = await check!.run(flawedHarness(flaw as Flaw)).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(String(error)).toContain("idempotency store contract");
+    expect(String(error)).toContain(failure);
   });
 
   it("the same store without a flaw passes every check", async () => {
@@ -307,7 +345,7 @@ describe("IdempotencyStore contract checks catch broken stores", () => {
   });
 
   it("every check catches at least one broken store", () => {
-    const shown = new Set(Object.values(caughtBy));
+    const shown = new Set(Object.values(caughtBy).map(([check]) => check));
     expect(idempotencyContractChecks.map((c) => c.name).filter((n) => !shown.has(n))).toEqual([]);
   });
 });

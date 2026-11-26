@@ -21,13 +21,21 @@ export interface IdempotencyStoreHarness<Tx = unknown> {
   /**
    * A new store with no records. Its own clock must read `clock.now`. A claim
    * older than `staleClaimMs` may be taken over; completed records live
-   * `completedTtlMs` when it is given, and forever otherwise.
+   * `completedTtlMs` when it is given, and forever otherwise. A check may
+   * call this more than once; it is done with the earlier store by then, so
+   * `create()` may clear what the earlier one kept.
    */
   create(options: { clock: StoreClock; staleClaimMs: number; completedTtlMs?: number }): Promise<IdempotencyStore<Tx>>;
   /** Writes one row of app data with this id inside `tx`, the way the app's create would. */
   writeRow(tx: Tx, id: string): Promise<void>;
   /** The ids of the app rows that committed. */
   rows(): Promise<string[]>;
+  /**
+   * True when a second transaction can run and commit while the first is
+   * still open. The check that a completion re-checks its claim at commit
+   * needs it; PGlite has one connection, so it cannot run there.
+   */
+  concurrentTransactions?: boolean;
 }
 
 export interface IdempotencyContractCheck {
@@ -46,10 +54,14 @@ function fail(message: string): never {
   throw new Error(`idempotency store contract: ${message}`);
 }
 
+/** Empty `headers` and absent `headers` are answered the same way, so they compare equal. */
+const dropEmptyHeaders = (key: string, value: unknown) =>
+  key === "headers" && value !== null && typeof value === "object" && Object.keys(value).length === 0 ? undefined : value;
+
 function same(actual: unknown, expected: unknown, what: string): void {
   // Compared as plain JSON values, so the order of fields in an object does not matter.
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
+  const a = JSON.stringify(actual, dropEmptyHeaders);
+  const e = JSON.stringify(expected, dropEmptyHeaders);
   if (!isDeepStrictEqual(a === undefined ? a : JSON.parse(a), e === undefined ? e : JSON.parse(e))) fail(`${what}\n  expected ${e}\n  got      ${a}`);
 }
 
@@ -134,6 +146,14 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       same(await s.outcome("h1", T0, { ...rec, owner: "person-b" }), "claimed", "the same key from another owner");
       same(await s.outcome("h1", T0, { ...rec, operation: "article.create" }), "claimed", "the same key for another operation");
       same(await s.outcome("h1", T0, { ...rec, key: "key-00000002" }), "claimed", "another key");
+      // Parts joined with a separator would collide here: every id below is "a:b:c:k" when joined with ":".
+      for (const id of [
+        { owner: "a:b", operation: "c", key: "k" },
+        { owner: "a", operation: "b:c", key: "k" },
+        { owner: "a", operation: "b", key: "c:k" },
+      ]) {
+        same(await s.outcome("h1", T0, id), "claimed", `the key of (${id.owner}, ${id.operation}, ${id.key}), whose parts joined would match another's`);
+      }
       same(await s.outcome("h1"), "replay", "the first key after the others");
     },
   },
@@ -175,12 +195,36 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       const s = await setup(harness);
       const old = await s.claimed("h1");
       same(await s.outcome("h1", T0 + STALE - MIN), "in_progress", "the same request before the claim is stale");
-      const taken = await s.claimed("h1", T0 + STALE + MIN);
+      // No `now` in the claim: the store must read its own clock.
+      s.clock.now = T0 + STALE + MIN;
+      const fromClock = await s.store.claim({ ...rec, requestHash: "h1" });
+      if (fromClock.type !== "claimed") fail(`a claim with no time, made when the store's clock says the claim is stale, was answered ${fromClock.type}`);
+      const taken = fromClock.token;
       await expectClaimLost(s.complete(old, "from-old"), "completing with a claim that was taken over");
       same(await harness.rows(), [], "app rows after the old holder's completion failed");
       await s.complete(taken, "from-new");
       same(await harness.rows(), ["from-new"], "app rows after the new holder completed");
       same(await s.claim("h1"), { type: "replay", result: { status: 201, body: { id: "from-new" } } }, "the replay after a takeover");
+    },
+  },
+  {
+    name: "a completion re-checks its claim when it commits",
+    async run(harness) {
+      // A slow request completes, but before its transaction commits its claim
+      // goes stale and another request takes it over and commits. The slow one
+      // must then fail, or both rows exist.
+      if (!harness.concurrentTransactions) return;
+      const s = await setup(harness);
+      const old = await s.claimed("h1");
+      const slow = s.store.transaction(async (tx) => {
+        await harness.writeRow(tx, "from-old");
+        await s.store.completeInTransaction(tx, { ...rec, token: old, result: { status: 201, body: { id: "from-old" } } });
+        const taken = await s.claimed("h1", T0 + STALE + MIN);
+        await s.complete(taken, "from-new");
+      });
+      await expectClaimLost(slow, "committing a completion whose claim was taken over after completeInTransaction");
+      same(await harness.rows(), ["from-new"], "app rows after the slow request's commit failed");
+      same(await s.claim("h1"), { type: "replay", result: { status: 201, body: { id: "from-new" } } }, "the replay after the slow request failed");
     },
   },
   {
@@ -219,6 +263,8 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       await s.complete(await s.claimed("h1"), "n1", undefined, rec, "n1");
       const other = { ...rec, owner: "person-b" };
       await s.complete(await s.claimed("h1", T0, other), "n1-b", undefined, other, "n1");
+      const otherOperation = { ...rec, operation: "comment.create" };
+      await s.complete(await s.claimed("h1", T0, otherOperation), "c1", undefined, otherOperation, "n1");
       let rolledBack = false;
       try {
         await s.store.transaction(async (tx) => {
@@ -236,6 +282,14 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       same(await s.outcome("anything-else"), "gone", "another request under the same key");
       same(await s.outcome("h1", T0 + 400 * DAY), "gone", "the key long after");
       same(await s.outcome("h1", T0, other), "replay", "another owner's record for the same resource id");
+      same(await s.outcome("h1", T0, otherOperation), "replay", "the same owner's record for the same resource id under another operation");
+      // With a lifetime set, a tombstone still never expires.
+      const t = await setup(harness, 7 * DAY);
+      await t.complete(await t.claimed("h1"), "n1", undefined, rec, "n1");
+      await t.store.transaction((tx) => t.store.tombstoneResource(tx, { owner: rec.owner, operation: rec.operation, resourceRef: "n1" }));
+      same(await t.outcome("h1", T0 + 400 * DAY), "gone", "a tombstone 400 days later, with a 7-day lifetime for completed records");
+      same(await t.store.purgeExpired(T0 + 400 * DAY), 0, "records purged 400 days later when only a tombstone is left");
+      same(await t.outcome("h1", T0 + 400 * DAY), "gone", "a tombstone after a purge 400 days later");
     },
   },
   {
@@ -275,8 +329,13 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       const s = await setup(harness);
       await s.claimed("h1");
       await s.complete(await s.claimed("h1", T0, { ...rec, key: "key-done" }), "done", undefined, { ...rec, key: "key-done" });
+      const deleted = { ...rec, key: "key-deleted" };
+      await s.complete(await s.claimed("h1", T0, deleted), "deleted", undefined, deleted, "deleted");
+      await s.store.transaction((tx) => s.store.tombstoneResource(tx, { owner: rec.owner, operation: rec.operation, resourceRef: "deleted" }));
       same(await s.store.purgeExpired(T0 + MIN), 0, "records purged while the claim is fresh");
       same(await s.store.purgeExpired(T0 + STALE + MIN), 1, "records purged once the claim is stale");
+      same(await s.store.purgeExpired(T0 + 400 * DAY), 0, "records purged 400 days later (a completed record and a tombstone are left)");
+      same(await s.outcome("h1", T0 + 400 * DAY, deleted), "gone", "a tombstone after purging");
       same(await s.outcome("h1", T0 + STALE + MIN), "claimed", "the key after its stale claim was purged");
       same(await s.outcome("h1", T0 + STALE + MIN, { ...rec, key: "key-done" }), "replay", "a completed key after the purge");
     },
@@ -291,10 +350,13 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       await s.complete(await s.claimed("h3", T0, { ...rec, key: "key-deleted" }), "a2", undefined, { ...rec, key: "key-deleted" }, "a2");
       await s.store.transaction((tx) => s.store.tombstoneResource(tx, { owner: rec.owner, operation: rec.operation, resourceRef: "a2" }));
       await s.complete(await s.claimed("h1", T0, b), "b1", undefined, b, "b1");
+      const longer = { ...rec, owner: `${rec.owner}2` };
+      await s.complete(await s.claimed("h1", T0, longer), "a2-longer", undefined, longer, "x1");
       same(await s.store.forgetOwner(rec.owner), 3, "records removed for one owner (completed, in progress, tombstone)");
       same(await s.outcome("h1"), "claimed", "a forgotten owner's completed key");
       same(await s.outcome("h3", T0, { ...rec, key: "key-deleted" }), "claimed", "a forgotten owner's tombstoned key");
       same(await s.outcome("h1", T0, b), "replay", "another owner's key");
+      same(await s.outcome("h1", T0, longer), "replay", "the key of an owner whose name starts with the forgotten one");
       same(await s.store.forgetOwner("nobody"), 0, "records removed for an owner with none");
     },
   },
