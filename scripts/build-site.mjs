@@ -74,6 +74,7 @@ export const PAGES = [
       ["0019 Schema without boot locks", "docs/decisions/0019-schema-without-boot-locks.md"],
       ["0020 Smoke-test the tarballs", "docs/decisions/0020-smoke-test-the-tarballs.md"],
       ["0021 Checks for the client Store contract", "docs/decisions/0021-client-store-contract-checks.md"],
+      ["0022 Checks for the server store contract", "docs/decisions/0022-server-store-contract-checks.md"],
     ],
   ],
   [

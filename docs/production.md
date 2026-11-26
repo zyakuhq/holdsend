@@ -10,6 +10,7 @@ HoldSend is not 1.0 yet, and its README will not say "ready for production" unti
 - [ ] **`purgeExpired()` runs on a schedule** (every hour or so), and **`forgetOwner(userId)` runs when an account is erased**.
 - [ ] **The stored result is small**, usually `{ id }`. It is replayed for as long as the record lives, so keep personal content out of it.
 - [ ] **Postgres in production, not memory.** `MemoryIdempotencyStore` is for tests; it forgets everything on restart.
+- [ ] **A custom `IdempotencyStore` keeps the contract**: one claim wins, the record and your row commit in one transaction, a lost claim throws `ClaimLostError`, and tombstones, purging and `forgetOwner` touch only what they should. Run it through the checks in [test/idempotency-store-contract.ts](../test/idempotency-store-contract.ts) (copy the file; it is not published as a package). They run in one process, so also test claims from two servers at once against your real database.
 - [ ] **The written time is shown, never used to order a feed.** Store it in its own column. ([protocol](protocol.md))
 - [ ] **CORS allows `Idempotency-Key` and `Written-At` and exposes `Idempotent-Replayed`** when the client runs on another origin.
 - [ ] **Your own monitoring counts outcomes.** Every answer from `handleIdempotent` has an `outcome` (`created`, `replayed`, `conflict`, `unkeyed`, `key_required` and a few more). Alert on `unkeyed` and `key_required` (a client sending without keys) and watch `conflict`.
