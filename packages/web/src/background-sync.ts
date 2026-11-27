@@ -86,9 +86,8 @@ function workRemains(result: unknown): boolean {
  *
  * The browser treats the sync as done when the promise resolves, and tries
  * again later only when it rejects. A flush that left items waiting (no
- * answer, server busy, held by another sender, or the device went offline
- * mid-flush) therefore rejects here, so the browser wakes the worker again
- * instead of giving up.
+ * answer, server busy, held by another sender, or lost connectivity) therefore
+ * rejects here, so the browser can wake the worker again instead of giving up.
  *
  * The browser retries only a few times (Chrome: about three, with growing
  * gaps) and then drops the sync; `event.lastChance` is true on the final

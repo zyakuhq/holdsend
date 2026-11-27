@@ -106,9 +106,8 @@ export interface FlushReport {
   /** Items that became stuck in this flush. */
   stuck: number;
   /**
-   * The device went offline during the flush and items it could send were
-   * still waiting at the end of that pass. A later pass in the same flush may
-   * have sent them since, so treat it as "look again", not as a count.
+   * The device went offline during a pass and sendable items for that owner
+   * were still waiting when the flush finished. Treat this as "look again".
    */
   deferredOffline?: boolean;
   /**
@@ -264,6 +263,7 @@ export class Outbox<P = unknown> {
     }
     const run = (async () => {
       const total = emptyReport();
+      const offlineOwners = new Set<string | null>();
       let next: string | null = owner ?? null;
       try {
         for (;;) {
@@ -272,12 +272,29 @@ export class Outbox<P = unknown> {
           total.retry += report.retry;
           total.busy += report.busy;
           total.stuck += report.stuck;
-          if (report.deferredOffline) total.deferredOffline = true;
+          if (report.deferredOffline) offlineOwners.add(next);
           if (report.nextCheckInMs !== undefined) {
             total.nextCheckInMs = Math.min(total.nextCheckInMs ?? Infinity, report.nextCheckInMs);
           }
           const [following] = this.queued;
           if (following === undefined) {
+            if (offlineOwners.size > 0) {
+              // A later pass may have sent an item skipped by an earlier,
+              // broader pass. Only ask for another wake if it still exists.
+              const items = await this.store.read();
+              const now = this.now();
+              const owners = [...offlineOwners];
+              const remains = items.some((item) => owners.some((deferredOwner) => isSendable(item, now, this.policy, deferredOwner ?? undefined)));
+              // A flush may have been queued during the read. Run it before
+              // resolving, as with a flush queued during any other await.
+              const [late] = this.queued;
+              if (late !== undefined) {
+                this.queued.delete(late);
+                next = late;
+                continue;
+              }
+              if (remains) total.deferredOffline = true;
+            }
             // Checking the queue and finishing happen in one synchronous
             // step, so a flush asked for from now on starts a new run
             // instead of being queued behind one that is already over.

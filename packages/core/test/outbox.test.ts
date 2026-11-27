@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStore, Outbox, classifyResponse, type OutboxItem } from "../src/index.js";
+import { MemoryStore, Outbox, classifyResponse, type OutboxItem, type Store } from "../src/index.js";
 import { FakeServer } from "./fake-server.js";
 
 type Payload = { text: string };
@@ -87,7 +87,7 @@ describe("Outbox", () => {
     expect(server.created.map((r) => JSON.parse(r.body).text)).toEqual(["first", "added meanwhile"]);
   });
 
-  describe("deferredOffline (pull request #81)", () => {
+  describe("deferredOffline", () => {
     it("is set when the device is offline before the first item", async () => {
       const { outbox, server } = setup({ online: () => false });
       await outbox.add("post.create", { text: "waiting" });
@@ -153,53 +153,178 @@ describe("Outbox", () => {
       expect(report.sent).toBe(1);
       expect(report.deferredOffline).toBeUndefined();
     });
+  });
 
-    it("stays set in the total when a queued pass for another owner runs after it", async () => {
-      const store = new MemoryStore<Payload>();
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => { release = resolve; });
-      const checks = [true, false, true];
-      const outbox = new Outbox<Payload>({
-        store,
-        isOnline: () => checks.shift() ?? true,
-        policy: { claimRenewMs: 0 },
-        send: async (item) => {
-          if (item.payload.text === "first") await gate;
-          return { type: "sent" };
-        },
-      });
-      await outbox.add("post.create", { text: "first" }, { owner: "alice" });
-      await outbox.add("post.create", { text: "waiting" }, { owner: "alice" });
-      await outbox.add("post.create", { text: "other pass" }, { owner: "bob" });
-      const running = outbox.flush("alice");
-      expect(outbox.flush("bob")).toBe(running);
-      release();
-      expect(await running).toMatchObject({ sent: 2, deferredOffline: true });
-      expect((await outbox.list()).map((entry) => entry.item.payload.text)).toEqual(["waiting"]);
+  it("keeps an offline remainder in the aggregate report when another caller queues a pass", async () => {
+    const store = new MemoryStore<Payload>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const checks = [true, false, true];
+    const outbox = new Outbox<Payload>({
+      store,
+      isOnline: () => checks.shift() ?? true,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => {
+        if (item.payload.text === "first") await gate;
+        return { type: "sent" };
+      },
     });
+    await outbox.add("post.create", { text: "first" }, { owner: "alice" });
+    await outbox.add("post.create", { text: "waiting" }, { owner: "alice" });
+    await outbox.add("post.create", { text: "other pass" }, { owner: "bob" });
+    const running = outbox.flush("alice");
+    const queued = outbox.flush("bob");
+    expect(queued).toBe(running);
+    release();
+    expect(await running).toMatchObject({ sent: 2, deferredOffline: true });
+    expect((await outbox.list()).map((entry) => entry.item.payload.text)).toEqual(["waiting"]);
+  });
 
-    it("stays set after a later queued pass sent the rest (one extra wake, by design: decision 0018)", async () => {
-      const store = new MemoryStore<Payload>();
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => { release = resolve; });
-      const checks = [true, false, true];
-      const outbox = new Outbox<Payload>({
-        store,
-        isOnline: () => checks.shift() ?? true,
-        policy: { claimRenewMs: 0 },
-        send: async (item) => {
-          if (item.payload.text === "first") await gate;
-          return { type: "sent" };
-        },
-      });
-      await outbox.add("post.create", { text: "first" });
-      await outbox.add("post.create", { text: "second" });
-      const running = outbox.flush();
-      expect(outbox.flush()).toBe(running);
-      release();
-      expect(await running).toMatchObject({ sent: 2, deferredOffline: true });
-      expect(await outbox.list()).toHaveLength(0);
+  it("clears the offline signal when a later queued pass sends the remainder", async () => {
+    const store = new MemoryStore<Payload>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const checks = [true, false, true];
+    const outbox = new Outbox<Payload>({
+      store,
+      isOnline: () => checks.shift() ?? true,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => {
+        if (item.payload.text === "first") await gate;
+        return { type: "sent" };
+      },
     });
+    await outbox.add("post.create", { text: "first" }, { owner: "alice" });
+    await outbox.add("post.create", { text: "second" }, { owner: "alice" });
+    const running = outbox.flush("alice");
+    expect(outbox.flush("alice")).toBe(running);
+    release();
+    expect(await running).toEqual({ sent: 2, retry: 0, busy: 0, stuck: 0 });
+    expect(await outbox.list()).toHaveLength(0);
+  });
+
+  it("does not report an offline remainder when a specific pass finishes an earlier all-owner pass", async () => {
+    const store = new MemoryStore<Payload>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const checks = [true, false, true];
+    const outbox = new Outbox<Payload>({
+      store,
+      isOnline: () => checks.shift() ?? true,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => {
+        if (item.payload.text === "first") await gate;
+        return { type: "sent" };
+      },
+    });
+    await outbox.add("post.create", { text: "first" }, { owner: "alice" });
+    await outbox.add("post.create", { text: "second" }, { owner: "alice" });
+    const running = outbox.flush();
+    expect(outbox.flush("alice")).toBe(running);
+    release();
+    expect(await running).toEqual({ sent: 2, retry: 0, busy: 0, stuck: 0 });
+    expect(await outbox.list()).toHaveLength(0);
+  });
+
+  it("lets a later all-owner pass clear a specific owner's offline remainder", async () => {
+    const store = new MemoryStore<Payload>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const checks = [true, false, true];
+    const outbox = new Outbox<Payload>({
+      store,
+      isOnline: () => checks.shift() ?? true,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => {
+        if (item.payload.text === "first") await gate;
+        return { type: "sent" };
+      },
+    });
+    await outbox.add("post.create", { text: "first" }, { owner: "alice" });
+    await outbox.add("post.create", { text: "second" }, { owner: "alice" });
+    const running = outbox.flush("alice");
+    expect(outbox.flush()).toBe(running);
+    release();
+    expect(await running).toEqual({ sent: 2, retry: 0, busy: 0, stuck: 0 });
+  });
+
+  it("runs a flush for work added during the final offline read", async () => {
+    const inner = new MemoryStore<Payload>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let reached!: () => void;
+    const finalRead = new Promise<void>((resolve) => { reached = resolve; });
+    let reads = 0;
+    const store: Store<Payload> = {
+      update: (fn) => inner.update(fn),
+      isDurable: () => inner.isDurable(),
+      read: async () => {
+        reads += 1;
+        const snapshot = await inner.read();
+        if (reads === 2) {
+          reached();
+          await gate;
+        }
+        return snapshot;
+      },
+    };
+    let online = false;
+    const sent: string[] = [];
+    const outbox = new Outbox<Payload>({
+      store,
+      isOnline: () => online,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => { sent.push(item.payload.text); return { type: "sent" }; },
+    });
+    await outbox.add("post.create", { text: "alice" }, { owner: "alice" });
+    const running = outbox.flush("alice");
+    await finalRead;
+    await outbox.add("post.create", { text: "bob" }, { owner: "bob" });
+    const queued = outbox.flush("bob");
+    online = true;
+    release();
+    expect(queued).toBe(running);
+    expect(await running).toMatchObject({ sent: 1, deferredOffline: true });
+    expect(sent).toEqual(["bob"]);
+    expect((await outbox.list()).map((entry) => entry.item.payload.text)).toEqual(["alice"]);
+  });
+
+  it("keeps the offline signal when connectivity flaps across queued passes", async () => {
+    const checks = [false, true, false];
+    const sent: string[] = [];
+    const outbox = new Outbox<Payload>({
+      store: new MemoryStore(),
+      isOnline: () => checks.shift() ?? false,
+      policy: { claimRenewMs: 0 },
+      send: async (item) => { sent.push(item.payload.text); return { type: "sent" }; },
+    });
+    for (const text of ["first", "second", "third"]) await outbox.add("post.create", { text }, { owner: "alice" });
+    const running = outbox.flush("alice");
+    expect(outbox.flush("alice")).toBe(running);
+    expect(await running).toMatchObject({ sent: 1, deferredOffline: true });
+    expect(sent).toEqual(["first"]);
+    expect((await outbox.list()).map((entry) => entry.item.payload.text)).toEqual(["second", "third"]);
+  });
+
+  it("propagates a failed final read and permits a later recovery flush", async () => {
+    const inner = new MemoryStore<Payload>();
+    let reads = 0;
+    const store: Store<Payload> = {
+      update: (fn) => inner.update(fn),
+      isDurable: () => inner.isDurable(),
+      read: async () => {
+        reads += 1;
+        if (reads === 2) throw new Error("read unavailable");
+        return inner.read();
+      },
+    };
+    let online = false;
+    const outbox = new Outbox<Payload>({ store, isOnline: () => online, send: async () => ({ type: "sent" }), policy: { claimRenewMs: 0 } });
+    await outbox.add("post.create", { text: "recover" });
+    await expect(outbox.flush()).rejects.toThrow("read unavailable");
+    online = true;
+    expect(await outbox.flush()).toEqual({ sent: 1, retry: 0, busy: 0, stuck: 0 });
+    expect(await outbox.list()).toHaveLength(0);
   });
 
   it("carries the written time, not the send time", async () => {
