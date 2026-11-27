@@ -75,6 +75,7 @@ export const PAGES = [
       ["0020 Smoke-test the tarballs", "docs/decisions/0020-smoke-test-the-tarballs.md"],
       ["0021 Checks for the client Store contract", "docs/decisions/0021-client-store-contract-checks.md"],
       ["0022 Checks for the server store contract", "docs/decisions/0022-server-store-contract-checks.md"],
+      ["0023 Checks for the draft log contract", "docs/decisions/0023-draft-log-contract-checks.md"],
     ],
   ],
   [

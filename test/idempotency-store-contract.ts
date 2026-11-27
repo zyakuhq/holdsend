@@ -116,6 +116,12 @@ export const idempotencyContractChecks: IdempotencyContractCheck[] = [
       const bodyOnly = await setup(harness);
       await bodyOnly.complete(await bodyOnly.claimed("h1"), "n2", { status: 200, body: null });
       same(await bodyOnly.claim("h1"), { type: "replay", result: { status: 200, body: null } }, "a repeat of a request whose body was null");
+      // A body that is a string stays a string, even when the text looks like JSON.
+      for (const [i, body] of ["42", "null", "true", '"quoted"', "[1]", "plain text"].entries()) {
+        const id = { ...rec, key: `key-text-${i}` };
+        await bodyOnly.complete(await bodyOnly.claimed("h1", bodyOnly.clock.now, id), `t${i}`, { status: 200, body }, id);
+        same(await bodyOnly.claim("h1", bodyOnly.clock.now, id), { type: "replay", result: { status: 200, body } }, `a repeat of a request whose body was the string ${JSON.stringify(body)}`);
+      }
     },
   },
   {

@@ -162,15 +162,10 @@ function toMs(value: Date | string | null): number {
 }
 
 function parseBody(value: unknown): unknown {
-  // Some drivers return JSONB as text.
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return value;
-    }
-  }
-  return value;
+  // Read as text (`::text` in the query), so every driver returns the JSON
+  // itself. Guessing from a parsed value would turn a body that is the string
+  // "42" into the number 42.
+  return typeof value === "string" ? JSON.parse(value) : value;
 }
 
 export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
@@ -205,7 +200,7 @@ export class PostgresIdempotencyStore implements IdempotencyStore<Queryable> {
       if (touched(inserted) === 1) return { type: "claimed", token };
 
       const found = await this.db.query(
-        `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body, result_headers, expires_at
+        `SELECT request_hash, state, claim_token, claimed_at, result_status, result_body::text AS result_body, result_headers::text AS result_headers, expires_at
            FROM ${this.t} WHERE owner = $1 AND operation = $2 AND key = $3`,
         [input.owner, input.operation, input.key],
       );

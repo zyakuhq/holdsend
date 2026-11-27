@@ -153,16 +153,12 @@ CREATE TABLE IF NOT EXISTS "${table}" (
 `.trim();
 }
 
+/** JSONB columns are read as text (see COLUMNS), so every driver returns the JSON itself and a string payload such as "42" stays a string. */
 function parseJson(v: unknown): unknown {
-  if (typeof v === "string") {
-    try {
-      return JSON.parse(v);
-    } catch {
-      return v;
-    }
-  }
-  return v;
+  return typeof v === "string" ? JSON.parse(v) : v;
 }
+
+const COLUMNS = "id, draft_id, rev, base_rev, base_id, reason, resolves::text AS resolves, written_at, payload::text AS payload";
 
 interface DraftRow {
   id: string;
@@ -203,12 +199,12 @@ export class PostgresDraftLog implements DraftLog<Queryable> {
 
   async append(tx: Queryable, owner: string, update: NewDraftUpdate & { id: string }): Promise<DraftUpdate> {
     await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([this.table, owner, update.draftId])]);
-    const found = await tx.query(`SELECT * FROM ${this.table} WHERE owner = $1 AND draft_id = $2 AND id = $3`, [owner, update.draftId, update.id]);
+    const found = await tx.query(`SELECT ${COLUMNS} FROM ${this.table} WHERE owner = $1 AND draft_id = $2 AND id = $3`, [owner, update.draftId, update.id]);
     if (found.rows.length) return fromRow(found.rows[0] as DraftRow);
     const inserted = await tx.query(
       `INSERT INTO ${this.table} (owner, draft_id, id, rev, base_rev, base_id, reason, resolves, written_at, payload)
        VALUES ($1, $2, $3, (SELECT COALESCE(MAX(rev), 0) + 1 FROM ${this.table} WHERE owner = $1 AND draft_id = $2), $4, $5, $6, $7::jsonb, $8, $9::jsonb)
-       RETURNING *`,
+       RETURNING ${COLUMNS}`,
       [
         owner,
         update.draftId,
@@ -225,7 +221,7 @@ export class PostgresDraftLog implements DraftLog<Queryable> {
   }
 
   async list(owner: string, draftId: string): Promise<DraftUpdate[]> {
-    const r = await this.options.db.query(`SELECT * FROM ${this.table} WHERE owner = $1 AND draft_id = $2 ORDER BY rev`, [owner, draftId]);
+    const r = await this.options.db.query(`SELECT ${COLUMNS} FROM ${this.table} WHERE owner = $1 AND draft_id = $2 ORDER BY rev`, [owner, draftId]);
     return r.rows.map((row) => fromRow(row as DraftRow));
   }
 }

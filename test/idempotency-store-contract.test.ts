@@ -88,6 +88,7 @@ type Flaw =
   | "purges tombstones"
   | "forgets every owner whose name starts with the one given"
   | "drops headers on replay"
+  | "reads a text body as JSON"
   | "replays any request under a completed key"
   | "lets another request share a claim in progress"
   | "never lets a stale claim be taken over"
@@ -162,6 +163,13 @@ class FlawedStore implements IdempotencyStore<Tx> {
       if (r.hash !== input.requestHash && !this.has("replays any request under a completed key")) return { type: "conflict" };
       const result = this.has("keeps the caller's result object") ? r.result! : copy(r.result!);
       if (this.has("drops headers on replay")) delete result.headers;
+      if (this.has("reads a text body as JSON") && typeof result.body === "string") {
+        try {
+          result.body = JSON.parse(result.body) as unknown;
+        } catch {
+          // Not JSON: kept as text, as the old Postgres store did.
+        }
+      }
       return { type: "replay", result };
     }
     if (r.hash !== input.requestHash && !this.has("lets another request share a claim in progress")) return { type: "conflict" };
@@ -302,6 +310,7 @@ const caughtBy: Record<Flaw, [check: string, failure: string]> = {
   "ignores the owner in keys": [SCOPE_CHECK, "the same key from another owner"],
   "joins key parts with a colon": [SCOPE_CHECK, "whose parts joined would match another's"],
   "drops headers on replay": ["a completed request is replayed with its result unchanged", "a repeat of the completed request"],
+  "reads a text body as JSON": ["a completed request is replayed with its result unchanged", 'whose body was the string "42"'],
   "replays any request under a completed key": ["a different request under a used key is a conflict", "another request under a completed key"],
   "lets another request share a claim in progress": ["a different request under a used key is a conflict", "another request under a key in progress"],
   "never lets a stale claim be taken over": [STALE_CHECK, "the store's clock says the claim is stale"],

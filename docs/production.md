@@ -35,7 +35,7 @@ HoldSend is not 1.0 yet, and its README will not say "ready for production" unti
 - [ ] **Items that need confirmation show when they were written** before the person presses Send.
 - [ ] **A custom `Store` keeps the `Store` contract**: each `update` is atomic, it keeps its own copies, and it saves items unchanged. Run it through the checks in [test/store-contract.ts](../test/store-contract.ts) (copy the file; it is not published as a package), and use the built-in stores where you can. ([stored item format](protocol.md#the-stored-item-format))
 - [ ] **Emergency messages, if you use them**: the screen says it is not an emergency service and tells people to call their local emergency number first; SMS links are tested on the phones your people use. ([emergency messages](emergency.md))
-- [ ] **Drafts on two devices, if you use them**: the API is early. It changed in 0.3 ([upgrading](upgrading.md)), and any further change keeps it outside the 1.0 promise until 1.1 ([decision 0015](decisions/0015-drafts-and-the-1.0-promise.md)). ([drafts](drafts.md))
+- [ ] **Drafts on two devices, if you use them**: the API is early. It changed in 0.3 ([upgrading](upgrading.md)), and any further change keeps it outside the 1.0 promise until 1.1 ([decision 0015](decisions/0015-drafts-and-the-1.0-promise.md)). A draft log for a database other than memory or Postgres must pass the checks in [test/draft-log-contract.ts](../test/draft-log-contract.ts) (copy the file). ([drafts](drafts.md))
 
 ## What 1.0 needs before the README changes
 
