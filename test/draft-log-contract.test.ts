@@ -38,6 +38,7 @@ function postgresHarness(): DraftLogHarness {
         transaction: (fn) => pglite.transaction((tx) => fn(tx as unknown as Queryable)),
       } as DraftLogUnderTest<Queryable> as DraftLogUnderTest;
     },
+    concurrentTransactions: false,
   };
 }
 
@@ -58,6 +59,7 @@ type Flaw =
   | "drops resolves"
   | "stores writtenAt in seconds"
   | "drops a payload that is not an object"
+  | "drops empty values inside the payload"
   | "reads a text payload as JSON"
   | "cuts long payloads"
   | "appends a retry again"
@@ -123,6 +125,7 @@ class FlawedLog implements DraftLog<Tx> {
     if (u.payload != null && !(this.has("drops a payload that is not an object") && typeof u.payload !== "object")) {
       stored.payload = this.has("keeps the caller's object") ? u.payload : copy(u.payload);
       const text = (stored.payload as { text?: unknown }).text;
+      if (this.has("drops empty values inside the payload")) stored.payload = JSON.parse(JSON.stringify(stored.payload, (k, v: unknown) => (k && (v === null || (Array.isArray(v) && !v.length)) ? undefined : v))) as unknown;
       if (this.has("reads a text payload as JSON") && typeof stored.payload === "string") {
         try {
           stored.payload = JSON.parse(stored.payload) as unknown;
@@ -189,6 +192,7 @@ const caughtBy: Record<Flaw, [check: string, failure: string]> = {
   "drops resolves": ["an appended update is listed with every field unchanged", "what append returned for the second update"],
   "stores writtenAt in seconds": ["an appended update is listed with every field unchanged", "what append returned for the first update"],
   "drops a payload that is not an object": ["an appended update is listed with every field unchanged", 'the payload "just text"'],
+  "drops empty values inside the payload": ["an appended update is listed with every field unchanged", "what append returned for the second update"],
   "reads a text payload as JSON": ["an appended update is listed with every field unchanged", 'the payload "42"'],
   "cuts long payloads": ["a payload of 256 KiB comes back whole", "came back changed or cut"],
   "appends a retry again": ["the same id again returns the stored update and adds nothing", "a retry of the same update"],

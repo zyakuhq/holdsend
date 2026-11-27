@@ -16,7 +16,11 @@ import type { DraftUpdate } from "@holdsend/core/drafts";
 
 export interface DraftLogUnderTest<Tx = unknown> {
   log: DraftLog<Tx>;
-  /** Runs `fn` in one transaction of the store the log is used with: commits when it resolves, rolls back when it throws. */
+  /**
+   * Runs `fn` in one transaction of the store the log is used with: commits
+   * when it resolves, rolls back when it throws, and rethrows that same error
+   * (not a wrapped one; the rollback check looks for it).
+   */
   transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
 }
 
@@ -26,9 +30,10 @@ export interface DraftLogHarness<Tx = unknown> {
   /**
    * True when `list` can run while a transaction is open. The check that an
    * update is not listed before its commit needs it; PGlite has one
-   * connection, so it cannot run there.
+   * connection, so it cannot run there. Required, so a copied harness says
+   * on purpose that it skips that check.
    */
-  concurrentTransactions?: boolean;
+  concurrentTransactions: boolean;
 }
 
 export interface DraftLogContractCheck {
@@ -49,14 +54,22 @@ function fail(message: string): never {
 type Update = NewDraftUpdate & { id: string };
 
 /**
- * A field that is null, undefined or an empty list means the same to
- * `readDraft` as a field that is absent, so they compare equal.
+ * An update's optional fields that are null or undefined, and `resolves`
+ * when empty, mean the same to `readDraft` as absent ones, so they compare
+ * equal. Only those top-level fields: the payload is compared exactly.
  */
-const dropEmpty = (key: string, value: unknown) =>
-  key !== "" && (value === null || (Array.isArray(value) && value.length === 0)) ? undefined : value;
+function normalise(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(normalise);
+  if (v === null || typeof v !== "object" || !("draftId" in v)) return v;
+  const out: Record<string, unknown> = { ...(v as Record<string, unknown>) };
+  for (const k of ["baseRev", "baseId", "writtenAt", "payload", "resolves"]) {
+    if (out[k] === null || out[k] === undefined || (k === "resolves" && Array.isArray(out[k]) && (out[k] as unknown[]).length === 0)) delete out[k];
+  }
+  return out;
+}
 
 function plain(v: unknown): unknown {
-  const s = JSON.stringify(v, dropEmpty);
+  const s = JSON.stringify(normalise(v));
   return s === undefined ? s : JSON.parse(s);
 }
 
@@ -125,7 +138,7 @@ export const draftLogContractChecks: DraftLogContractCheck[] = [
         reason: "resolve",
         resolves: ["u-0", "u-x"],
         writtenAt: 8.64e15,
-        payload: { text: "Ünïcode, \"quotes\", <b>tags</b>, emoji 🛰️ and a\nnewline", list: [null, true, 0, "", { deep: [0.1, -2, 1e21] }], empty: {} },
+        payload: { text: "Ünïcode, \"quotes\", <b>tags</b>, emoji 🛰️ and a\nnewline", list: [null, true, 0, "", { deep: [0.1, -2, 1e21] }], n: null, e: [], o: {} },
       });
       const b = await s.append(second);
       const rev2 = checkRev(b.rev, "the second update");
@@ -133,14 +146,14 @@ export const draftLogContractChecks: DraftLogContractCheck[] = [
       const bare = update("u-3", { reason: "delete" });
       const c = await s.append(bare);
       same(c, stored(bare, checkRev(c.rev, "the third update")), "what append returned for an update with only the required fields");
-      for (const payload of ["just text", "42", "null", '"quoted"', 42, false, ["a", "b"]]) {
+      for (const payload of ["just text", "42", "null", '"quoted"', 42, false, ["a", "b"], []]) {
         const u = update(`u-scalar-${JSON.stringify(payload)}`, { payload });
         const got = await s.append(u);
         same(got.payload, payload, `the payload ${JSON.stringify(payload)} as append returned it`);
       }
       const listed = await s.list();
       same(listed.slice(0, 3), [a, b, c], "the listed updates (the same as append returned)");
-      same(listed.slice(3).map((u) => u.payload), ["just text", "42", "null", '"quoted"', 42, false, ["a", "b"]], "payloads that are not objects, as listed");
+      same(listed.slice(3).map((u) => u.payload), ["just text", "42", "null", '"quoted"', 42, false, ["a", "b"], []], "payloads that are not objects, as listed");
     },
   },
   {
@@ -185,6 +198,10 @@ export const draftLogContractChecks: DraftLogContractCheck[] = [
   {
     name: "updates to one draft at the same time all keep, each with its own revision",
     async run(harness) {
+      // Every append must succeed. On a database that aborts one of two
+      // conflicting transactions (SERIALIZABLE, CockroachDB), the log itself
+      // must retry: acceptDraftUpdate does not, and the device would only
+      // send again later.
       const s = await setup(harness);
       const n = 25;
       const results = await Promise.allSettled(Array.from({ length: n }, (_, i) => s.append(update(`u-${String(i).padStart(2, "0")}`))));
