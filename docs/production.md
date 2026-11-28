@@ -43,5 +43,5 @@ These are the project's own gates. Each one is tracked in [STATUS.md](STATUS.md)
 
 1. **The API is frozen.** The items of [decision 0013](decisions/0013-api-review-for-1.0.md) are settled ([decision 0015](decisions/0015-drafts-and-the-1.0-promise.md)) and the breaking one is made; `api/*.api.txt` becomes the 1.0 record at the freeze. The migration guide from 0.2 is [upgrading.md](upgrading.md).
 2. **Phone features have run on phones.** SMS links on a real iPhone and a real Android phone, and the Android background task on a real phone or an emulator in CI (the emulator part is met by the emulator job in CI, [decision 0016](decisions/0016-android-emulator-ci.md), which forces the job rather than waiting for Android; the SMS links still wait). Until then those features stay outside the 1.0 promise and say so.
-3. **A final audit by reviewers who did not write the code**, with every finding fixed or explained, like the four audits in [docs/audits](audits).
+3. **A final audit by reviewers who did not write the code**, with every finding fixed or explained, like the audits in [docs/audits](audits). What it reads and how it reports: [the brief](final-audit.md).
 4. **Someone other than the project has run it.** At least one app outside this repository has used a release without hitting a bug that loses or duplicates an item.

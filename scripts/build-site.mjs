@@ -38,6 +38,7 @@ export const PAGES = [
     "How it works",
     [
       ["Before you ship", "docs/production.md"],
+      ["Final audit brief", "docs/final-audit.md"],
       ["Upgrading", "docs/upgrading.md"],
       ["Wire protocol", "docs/protocol.md"],
       ["Emergency messages", "docs/emergency.md"],
